@@ -1,9 +1,42 @@
 import HeroSection from "@/components/hero";
-import { Card, CardContent } from "@/components/ui/card";
-import { featuresData, howItWorksData } from "@/data/landing";
+import Capabilities from "@/components/landing/capabilities";
+import Workflow from "@/components/landing/workflow";
+import Trust from "@/components/landing/trust";
+import PricingPreview from "@/components/landing/pricing-preview";
+import Faq from "@/components/landing/faq";
 import { buildStatTiles } from "@/lib/stat-tiles";
 import { getLandingStats } from "@/lib/stats";
 
+export const metadata = {
+  description:
+    "Track your accounts, record what you spend, plan against a budget and see where the month actually went. WHealthOS is a personal financial workspace — no bank connection, no card number.",
+  alternates: { canonical: "/" },
+};
+
+// The public landing page.
+//
+// A server component from top to bottom. The only client JavaScript it needs is
+// the dashboard walkthrough in the hero, which is its own island -- the
+// statistics, the capability grid, the workflow, the trust list, the pricing
+// preview and the FAQ all render on the server and ship nothing. The FAQ opens
+// and closes with <details>, not state.
+//
+// The order is an argument rather than a list of panels:
+//
+//   hero          what this is, and the product itself doing it
+//   numbers       four figures out of our own database, as evidence
+//   features      what you can actually do, with the benefit leading
+//   workflow      how you get from an empty account to a month that reads
+//   trust         what is verified about handling the data, and what is not
+//   pricing       what it costs, read from the pricing page's own module
+//   faq           the questions none of the above answered
+//
+// There is no closing call-to-action section, deliberately. The footer opens
+// with one -- "Take control of your finances" and a Get Started button, on
+// every page -- and a page-level CTA immediately above it was removed earlier
+// precisely because two of them stacked said the same thing twice. The FAQ
+// closes with a single line pointing at the demo instead.
+//
 // The band drops a figure it cannot compute rather than showing a gap; the
 // About page renders the same tiles and shows the gap. Labels and formatting
 // are shared, so the two cannot drift.
@@ -30,11 +63,21 @@ export default async function Home() {
   );
 
   return (
-    <div className="mt-40">
+    // pt clears the fixed header, which the marketing layout does not reserve
+    // space for. The same values the About and pricing pages use -- it was
+    // mt-40 here, 160px, which left a third of the first viewport empty above
+    // a headline whose job is to be read immediately.
+    <div className="pb-24 pt-28 md:pt-32">
       <HeroSection />
 
+      {/* The statistics band, kept exactly as it was: a full-bleed muted
+          slab of centred figures in the primary colour. It is the one part of
+          this page the redesign leaves alone, by instruction -- the figures,
+          their labels, the layout and the colour are all the originals. It is
+          also the only full-width band on the page, so it breaks out of the
+          content shell the sections below use rather than sitting inside it. */}
       {statsData.length > 0 && (
-        <section className="py-20 bg-muted">
+        <section className="mt-20 py-20 bg-muted">
           <div className="container mx-auto px-4">
             <div
               className={`grid grid-cols-2 gap-8 ${STAT_COLUMNS[statsData.length]}`}
@@ -52,45 +95,11 @@ export default async function Home() {
         </section>
       )}
 
-      <section id="features" className="py-20">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">
-            Everything You Need to Manage Your Finances
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuresData.map((feature, index) => (
-              <Card key={index} className="p-6">
-                <CardContent className="space-y-4 pt-4">
-                  {feature.icon}
-                  <h3 className="text-xl font-semibold">{feature.title}</h3>
-                  <p className="text-muted-foreground">{feature.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 bg-muted">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-16">How It Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {howItWorksData.map((step, index) => (
-              <div key={index} className="text-center">
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  {step.icon}
-                </div>
-                <h3 className="text-xl font-semibold mb-4">{step.title}</h3>
-                <p className="text-muted-foreground">{step.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* The closing call to action lives in the footer now, where it is on
-          every page rather than only this one. Two of them, stacked, said the
-          same thing twice. */}
+      <Capabilities />
+      <Workflow />
+      <Trust />
+      <PricingPreview />
+      <Faq />
     </div>
   );
 }
