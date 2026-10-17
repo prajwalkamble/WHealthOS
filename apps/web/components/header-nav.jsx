@@ -79,12 +79,59 @@ export const NAV = [
   },
 ];
 
+// A same-page anchor, scrolled rather than jumped.
+//
+// Only for a link whose href is "/#thing" when the browser is already on "/".
+// Anywhere else it does nothing and the Link navigates normally, so following
+// Features from /pricing is still a route change that happens to land on a
+// fragment.
+//
+// Smoothing lives here rather than in a global `html { scroll-behavior:
+// smooth }` because that declaration breaks the other case: loading /#features
+// directly, the browser animates towards the fragment and the App Router's own
+// scroll handling cancels the animation partway, leaving the reader at the top
+// of the page. Doing it per control, as components/back-to-top.jsx already
+// does, smooths the click without touching the load. globals.css records the
+// measurement.
+//
+// scroll-padding-top on <html> supplies the offset for the fixed header, so
+// there is no magic number here.
+const scrollToHash = (event, href) => {
+  if (typeof window === "undefined") return;
+  if (!href?.startsWith("/#")) return;
+  if (window.location.pathname !== "/") return;
+
+  const target = document.getElementById(href.slice(2));
+  if (!target) return;
+
+  event.preventDefault();
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  target.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  // The fragment still belongs in the address bar: a reader who copies the URL
+  // should get the section back, and the back button should return them.
+  window.history.pushState(null, "", href);
+};
+
 // A short grace period on leaving, so moving the pointer diagonally from the
 // trigger down into the panel does not close it on the way.
 const CLOSE_DELAY_MS = 120;
 
-const triggerClass =
-  "flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground";
+// Measured off the reference: 17px at weight 500, with 13px of padding either
+// side of each item -- so the visual gap between two labels is 26px and the
+// padding is also the hover target. The container carries no gap of its own
+// for that reason.
+// Navigation reads as navigation: muted until it is wanted, the theme's own
+// foreground on hover and focus, and no surface of its own. The padding is the
+// hover target rather than a visible shape -- an item that draws a box around
+// itself is a button, and four buttons in a row is a toolbar, not a nav.
+//
+// The focus ring is the one state that does draw a shape, because it has to.
+const triggerClass = cn(
+  "flex items-center gap-1 rounded-md px-3 py-1.5 text-[15px] font-medium",
+  "text-muted-foreground transition-colors duration-150 hover:text-foreground",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  "focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+);
 
 const HeaderNav = ({ className }) => {
   const [openLabel, setOpenLabel] = useState(null);
@@ -118,7 +165,7 @@ const HeaderNav = ({ className }) => {
   }, [openLabel]);
 
   return (
-    <div className={cn("flex items-center gap-6", className)}>
+    <div className={cn("flex items-center", className)}>
       {NAV.map(({ label, href, items }) => {
         if (!items) {
           return href ? (
@@ -152,9 +199,12 @@ const HeaderNav = ({ className }) => {
               onClick={() => setOpenLabel(isOpen ? null : label)}
             >
               {label}
+              {/* Small and half-strength: the chevron says a panel exists,
+                  it is not a second piece of punctuation. */}
               <ChevronDown
+                aria-hidden
                 className={cn(
-                  "h-4 w-4 transition-transform duration-200",
+                  "h-3.5 w-3.5 opacity-60 transition-transform duration-200 motion-reduce:transition-none",
                   isOpen && "rotate-180"
                 )}
               />
@@ -167,35 +217,48 @@ const HeaderNav = ({ className }) => {
                     setOpenLabel(null);
                   }
                 }}
-                className="absolute left-1/2 top-full z-50 w-80 -translate-x-1/2 pt-3"
+                className="absolute left-1/2 top-full z-50 w-[290px] -translate-x-1/2 pt-2.5"
               >
                 {/* The padding above sits inside the hover area, so the gap
                     between trigger and panel does not count as "left". */}
-                <div className="overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150">
+                {/* Matched to the header panel: the same 16px corners, the
+                    same hairline border and the same glass, so the dropdown
+                    reads as the panel extending rather than as a separate
+                    object appearing underneath it.
+
+                    The shadow is low-contrast and pulled in by a negative
+                    spread -- enough to lift the panel off the page, not enough
+                    to be a feature of its own. It fades and rises 2px, which
+                    is the smallest movement that reads as "this came from the
+                    trigger"; motion-reduce drops the rise. */}
+                <div className="overflow-hidden rounded-2xl border border-border/60 bg-popover/95 p-2 text-popover-foreground shadow-[0_12px_32px_-16px_hsl(222_47%_11%/0.35)] backdrop-blur-md backdrop-saturate-150 animate-in fade-in-0 slide-in-from-top-1 duration-200 motion-reduce:animate-none">
                   {items.map((item) =>
                     item.href ? (
                       <Link
                         key={item.label}
                         href={item.href}
-                        onClick={() => setOpenLabel(null)}
-                        className="block rounded-lg px-3 py-2.5 transition-colors hover:bg-accent"
+                        onClick={(event) => {
+                          setOpenLabel(null);
+                          scrollToHash(event, item.href);
+                        }}
+                        className="block rounded-xl px-3 py-2.5 transition-colors duration-150 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <span className="block text-sm font-medium">
+                        <span className="block text-sm font-medium leading-snug">
                           {item.label}
                         </span>
-                        <span className="block text-xs text-muted-foreground">
+                        <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">
                           {item.description}
                         </span>
                       </Link>
                     ) : (
                       <span
                         key={item.label}
-                        className="block cursor-default rounded-lg px-3 py-2.5"
+                        className="block cursor-default rounded-xl px-3 py-2.5"
                       >
-                        <span className="block text-sm font-medium">
+                        <span className="block text-sm font-medium leading-snug">
                           {item.label}
                         </span>
-                        <span className="block text-xs text-muted-foreground">
+                        <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">
                           {item.description}
                         </span>
                       </span>

@@ -19,7 +19,11 @@ const MarketingLayout = async ({ children }) => {
   const shell = (
     <>
       <Header />
-      <main className="min-h-screen">{children}</main>
+      {/* The header is fixed, so the space it occupies is reserved here
+          rather than by each page guessing at it. --header-space is the
+          bar's height plus the offset it floats at when the page is at
+          the top; globals.css holds both. */}
+      <main className="min-h-screen pt-[var(--header-space)]">{children}</main>
       <Footer />
     </>
   );

@@ -1125,3 +1125,142 @@
     transform: none;
   }
 }
+
+/* The marketing header's geometry, in one place.
+ *
+ * The bar is 64px tall on desktop and 56px below lg, floating 18px (12px on
+ * small screens) below the top of the page until the reader scrolls. It was
+ * 93/85 at the reference's own measurements; the owner asked for a shorter
+ * bar, so these are the numbers now and the reference's height is the one
+ * thing from it that this header does not keep.
+ *
+ * Everything downstream derives from them: components/header-shell.jsx reads
+ * the offset, the marketing layout reserves the sum as padding on <main>, and
+ * the anchor offset below is computed from it. Changing a height here is the
+ * whole change -- no page has a number of its own to keep in step.
+ *
+ * Reserving the space centrally is what lets every marketing page stop
+ * guessing. Three of them carried their own pt-28/pt-32 to clear a 61px bar;
+ * the rest carried py-14, which was already less than the bar was tall. */
+:root {
+  --header-h: 4rem; /* 64px */
+  --header-rest-offset: 1.125rem; /* 18px */
+  --header-space: calc(var(--header-h) + var(--header-rest-offset));
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --header-h: 3.5rem; /* 56px */
+    --header-rest-offset: 0.75rem; /* 12px */
+  }
+}
+
+/* Anchor landing position.
+ *
+ * The header is fixed and the marketing layout reserves its space with
+ * padding rather than flow, so without this an anchor target lands underneath
+ * the bar. The scrolled bar occupies 0 to --header-h, so --header-space
+ * clears it with the rest offset left over as breathing room. Section
+ * headings carry scroll-mt-28 as well, which covers an element whose own box
+ * needs the offset rather than the scroll container.
+ *
+ * There is deliberately NO `html { scroll-behavior: smooth }` here, and the
+ * reason is measured rather than assumed. With that declaration in place,
+ * loading /#features scrolled to 280px and was then reset to 0: the browser
+ * animates the jump to the fragment, and the App Router's own scroll handling
+ * lands on top of the animation while it is still running and cancels it. The
+ * instant jump happens before hydration and survives. An anchor that does not
+ * arrive is a worse outcome than one that arrives without a glide, so the
+ * smoothing lives on the controls that can do it safely instead:
+ * components/back-to-top.jsx and the header nav's same-page links, both of
+ * which call scrollTo with behavior "smooth" and both of which fall back to
+ * "auto" when the visitor has asked for reduced motion. */
+html {
+  scroll-padding-top: var(--header-space);
+}
+
+
+/* The floating header's running gradient border.
+ *
+ * Only while the bar is floating. Once it scrolls and pins flush to the top it
+ * is an ordinary header with a rule along its bottom edge, and a light chasing
+ * around a full-width bar would be a decoration competing with the page rather
+ * than an edge defining a panel.
+ *
+ * Drawn as a masked ring rather than a border, because a border cannot carry a
+ * gradient: the pseudo-element fills the whole border box with the gradient,
+ * then two masks cut the middle out of it -- one clipped to the content box,
+ * one to the border box, composited so only the difference survives. What is
+ * left is a 2px band following the capsule's own radius, which it inherits, so
+ * the ring stays a perfect capsule at any width without being told the radius.
+ *
+ * The gradient carries two full blue-purple cycles across a background twice
+ * the element's width, so sliding it by exactly one element width returns it
+ * to the phase it started in. That is what makes the loop seamless -- a single
+ * cycle would visibly snap back at the end of every repeat.
+ *
+ * The hairline border underneath is deliberate. mask-composite is well
+ * supported now, but where it is not, the pseudo-element paints as a solid
+ * gradient slab, so it is also hidden there: @supports gates the whole effect
+ * and the plain border is what shows.
+ *
+ * Opacity rather than display, so it fades out as the bar pins and back in as
+ * it releases, on the same 300ms the surface already uses. */
+@supports ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
+  [data-header]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    /* The ring's thickness. It overlays the 1px fallback border and extends a
+       little further in, which is why the band reads as its own edge rather
+       than as a tint on the border underneath. */
+    padding: 2px;
+    background-image: linear-gradient(
+      90deg,
+      theme("colors.blue.600"),
+      theme("colors.purple.600"),
+      theme("colors.blue.600"),
+      theme("colors.purple.600"),
+      theme("colors.blue.600")
+    );
+    background-size: 200% 100%;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 300ms ease-out;
+    pointer-events: none;
+  }
+
+  [data-header]:not([data-scrolled])::before {
+    opacity: 1;
+    animation: headerRing 4s linear infinite;
+  }
+}
+
+@keyframes headerRing {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
+/* Motion is the decoration here, not the colour: with it reduced the border
+   keeps its gradient and simply stops travelling. */
+@media (prefers-reduced-motion: reduce) {
+  [data-header]:not([data-scrolled])::before {
+    animation: none;
+  }
+
+  [data-header]::before {
+    transition: none;
+  }
+}

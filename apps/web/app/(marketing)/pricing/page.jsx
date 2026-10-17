@@ -13,9 +13,9 @@ export const metadata = {
 // state, and those live in PricingPlans.
 export default function PricingPage() {
   return (
-    // pt-24 clears the fixed header, which the marketing layout does not
-    // reserve space for.
-    <div className="container mx-auto px-4 pb-20 pt-28">
+    // No top padding: the marketing layout reserves the fixed header's space
+    // for every page at once.
+    <div className="container mx-auto px-4 pb-20">
       <div className="mx-auto max-w-2xl text-center">
         <span className="inline-block rounded-full border bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Pricing

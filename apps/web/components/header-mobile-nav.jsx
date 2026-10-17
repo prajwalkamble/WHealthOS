@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { Button } from "./ui/button";
@@ -15,6 +15,29 @@ import { cn } from "@/lib/utils";
 const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
   const [open, setOpen] = useState(false);
 
+  // Escape closes it, the way any menu should, and the body does not scroll
+  // underneath it while it is open -- the panel covers the viewport's width
+  // and scrolling the page behind it leaves the menu pointing at a position
+  // the reader can no longer see.
+  //
+  // The overflow is restored from whatever it was rather than hard-set to
+  // "visible", so this cannot fight anything else that locks scrolling.
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   const linkClass =
     "text-sm font-medium text-muted-foreground transition-colors hover:text-foreground";
 
@@ -23,7 +46,7 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
       <Button
         variant="ghost"
         size="icon"
-        className="lg:hidden"
+        className="h-10 w-10 shrink-0 lg:hidden"
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
@@ -31,9 +54,12 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
         {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </Button>
 
+      {/* Matched to the panel above it: the same 16px corners, the same
+          hairline border, the same glass. max-h with its own scroll so a long
+          menu cannot run off the bottom of a short phone. */}
       {open && (
-        <div className="absolute inset-x-0 top-full border-t bg-background lg:hidden">
-          <div className="container mx-auto flex flex-col gap-1 px-4 py-3">
+        <div className="absolute inset-x-0 top-full mt-2 max-h-[calc(100vh-var(--header-space)-1.5rem)] overflow-y-auto rounded-2xl border border-border/60 bg-background/95 shadow-[0_12px_32px_-16px_hsl(222_47%_11%/0.35)] backdrop-blur-md backdrop-saturate-150 lg:hidden">
+          <div className="flex flex-col gap-0.5 px-4 py-3">
             {/* No hover on a touch screen, so a section's children are simply
                 listed under it rather than hidden behind a dropdown. */}
             {nav.map(({ label, href, items }) => (

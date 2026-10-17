@@ -218,7 +218,11 @@ const Footer = () => {
             <p className="text-base font-medium leading-7">
               <a
                 href={`mailto:${CONTACT_EMAIL}`}
-                className="rounded-sm underline underline-offset-4 transition-colors hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                // break-all: the address is one unbroken token, so at a 320px
+                // viewport it measured 165px against a 148px column and pushed
+                // the document 17px wider than the screen. Nothing else on the
+                // page overflows there.
+                className="inline-block max-w-full break-all rounded-sm underline underline-offset-4 transition-colors hover:text-foreground/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 {CONTACT_EMAIL}
               </a>

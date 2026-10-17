@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ArrowUpRight, KeyRound, Lock, MapPin, ShieldCheck } from "lucide-react";
 import { SECURITY, SECURITY_LINK } from "@/lib/legal/security";
-import Section from "./section";
+import Section, { BODY } from "./section";
+import { cn } from "@/lib/utils";
 
 // Four things about handling money that are true, and a link to the page that
 // says what is not.
@@ -60,21 +61,21 @@ const Trust = () => {
       title="What we can actually tell you about your data"
       lead="A security page is the one place where an unsupported claim is dangerous, because the reader has no way to check it. So this is the verified list, and the gaps are published too."
     >
-      <ul className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2">
+      <ul className="mt-12 grid gap-x-12 gap-y-10 sm:grid-cols-2">
         {ITEMS.map(({ icon: Icon, title, body }) => (
           <li key={title} className="flex gap-4">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <Icon aria-hidden className="h-[18px] w-[18px]" />
             </span>
             <div className="min-w-0">
-              <h3 className="text-base font-semibold tracking-tight">{title}</h3>
-              <p className="mt-1.5 text-sm leading-6 text-muted-foreground">{body}</p>
+              <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
+              <p className={cn("mt-2", BODY)}>{body}</p>
             </div>
           </li>
         ))}
       </ul>
 
-      <p className="mt-8 text-sm text-muted-foreground">
+      <p className="mt-10 text-base text-muted-foreground">
         There is no certification, no independent audit and no penetration test
         behind WHealthOS, and the Security page names those gaps rather than
         leaving them to be inferred.{" "}

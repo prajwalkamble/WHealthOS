@@ -44,9 +44,9 @@ export default async function AboutPage() {
   );
 
   return (
-    // pt-28 clears the fixed header, which the marketing layout does not
-    // reserve space for. Matches the pricing page.
-    <div className="container mx-auto px-4 pb-24 pt-28 md:pt-32">
+    // No top padding: the marketing layout reserves the fixed header's space
+    // for every page at once.
+    <div className="container mx-auto px-4 pb-24">
       <AboutHero />
       <Stats stats={stats} />
       <Capabilities />

@@ -25,7 +25,9 @@ const OPTIONS = [
 // toggle sits in the public header and useAuth() requires a ClerkProvider --
 // which is exactly what the public pages no longer mount. The theme still
 // changes for a logged-out visitor; there is simply no account to write to.
-const ThemeToggle = ({ persist = false }) => {
+// className: the marketing header sizes this to match the rest of its action
+// row. Everywhere else it is omitted and the button keeps its default size.
+const ThemeToggle = ({ persist = false, className }) => {
   const { theme, setTheme } = useTheme();
   const { setPreference } = usePreferences();
   // theme is only known in the browser, so the checkmark waits for mount
@@ -54,7 +56,13 @@ const ThemeToggle = ({ persist = false }) => {
   // placeholder of the same size keeps the header from shifting.
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" className="relative" disabled aria-hidden>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn("relative", className)}
+        disabled
+        aria-hidden
+      >
         <Sun className="h-5 w-5" />
         <span className="sr-only">Change theme</span>
       </Button>
@@ -64,7 +72,7 @@ const ThemeToggle = ({ persist = false }) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className={cn("relative", className)}>
           <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Change theme</span>

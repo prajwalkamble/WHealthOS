@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { CAPABILITIES } from "@/data/landing";
-import Section from "./section";
+import Section, { BODY, CARD } from "./section";
 import { cn } from "@/lib/utils";
 
 // What someone can actually do with WHealthOS.
@@ -49,7 +49,8 @@ const Capabilities = () => (
         <li
           key={title}
           className={cn(
-            "rounded-xl border bg-card p-6",
+            CARD,
+            "p-6 md:p-7",
             // Only from lg, where there are three columns for a cell to span.
             wide && "lg:col-span-2",
             full && "lg:col-span-3"
@@ -64,19 +65,19 @@ const Capabilities = () => (
                 <Icon aria-hidden className="h-[18px] w-[18px]" />
               </span>
 
-              <h3 className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <h3 className="mt-5 text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {title}
               </h3>
               {/* The benefit is the heading a reader actually reads; the
                   feature name above it is the label. Ordered that way on
                   purpose. */}
-              <p className="mt-2 text-balance text-lg font-semibold leading-snug tracking-tight">
+              <p className="mt-2.5 text-balance text-xl font-semibold leading-snug tracking-tight">
                 {benefit}
               </p>
             </div>
 
             <div className={cn("min-w-0", full && "lg:pt-1")}>
-              <p className={cn("mt-2.5 text-sm leading-6 text-muted-foreground", full && "lg:mt-0")}>
+              <p className={cn("mt-3", BODY, full && "lg:mt-0")}>
                 {body}
               </p>
 
@@ -95,7 +96,7 @@ const Capabilities = () => (
     {/* The honest footnote. The pricing table lists multi-currency as a Pro
         feature and the About page labels it Planned; saying nothing here would
         leave the grid reading as the complete product. */}
-    <p className="mt-6 text-sm text-muted-foreground">
+    <p className="mt-7 text-base text-muted-foreground">
       Multi-currency and the full financial intelligence layer are not built
       yet.{" "}
       <Link

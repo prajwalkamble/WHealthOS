@@ -137,7 +137,20 @@ const DashboardProductDemo = ({ className }) => {
         role="img"
         aria-label="The WHealthOS dashboard, showing balance, income, expenses, savings rate, cash flow, expense breakdown, recent transactions and account balances."
       >
-        <div className={cn("flex pointer-events-none", !mounted && "invisible")}>
+        {/* inert as well as pointer-events-none. pointer-events-none puts the
+            walkthrough out of a mouse's reach but leaves its controls in the
+            tab order, so a keyboard user landed on the Bars/Flow switch, the
+            donut's legend and the transaction list's "View All" -- five stops
+            inside a demonstration, none of which can be operated and one of
+            which leads off the page. inert removes the whole subtree from
+            focus and from the accessibility tree; the aria-label on the frame
+            above still describes what it shows.
+
+            The timeline is unaffected. It drives the switch with
+            element.click(), which dispatches the event directly rather than
+            going through user interaction, exactly as it already does past
+            pointer-events-none. */}
+        <div inert className={cn("flex pointer-events-none", !mounted && "invisible")}>
           {/* Sidebar: the application's real navigation, with the same
               sections a signed-in visitor gets. */}
           <div
