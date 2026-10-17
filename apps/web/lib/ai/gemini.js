@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // insights each hard-coded "gemini-1.5-flash"; when Google retired it both
 // broke at once, and the insights quietly fell back to the same canned text
 // every month. Change the model here and nowhere else.
-export const GEMINI_MODEL = "gemini-3.8-flash";
+export const GEMINI_MODEL = "gemini-4-argon";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 

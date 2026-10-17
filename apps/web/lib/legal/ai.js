@@ -31,7 +31,7 @@ export const AI_USAGE_LINK = "/ai-usage";
 export const AI_PROVIDER = Object.freeze({
   name: "Google",
   service: "Gemini API",
-  model: "gemini-3.8-flash",
+  model: "gemini-4-argon",
   sdk: "@google/generative-ai",
   // Verified: a Gemini Developer API key (process.env.GEMINI_API_KEY) through
   // the @google/generative-ai SDK. Not Vertex AI, which is a different service

@@ -58,7 +58,7 @@ export const TERMS = {
 
   // --- AI, verified ------------------------------------------------------
   //
-  // lib/ai/gemini.js, model gemini-3.8-flash. Two callers:
+  // lib/ai/gemini.js, model gemini-4-argon. Two callers:
   //   actions/transaction.js   -- the uploaded receipt image, on request.
   //   lib/inngest/functions.js -- generateFinancialInsights sends the month's
   //     income, expenses and per-category totals, on a cron, to every user
