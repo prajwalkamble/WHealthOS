@@ -1,5 +1,6 @@
 "use client";
 
+import { useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowDown, ArrowUp, BarChart3, Minus } from "lucide-react";
 import {
@@ -14,6 +15,7 @@ import { formatCurrency } from "@/lib/format";
 import { change } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { ExportButton } from "@/components/export-drawer";
+import CashflowSankey from "./cashflow-sankey";
 import FlowChart from "./flow-chart";
 import CategoryTable from "./category-table";
 
@@ -65,6 +67,10 @@ const Headline = ({ label, value, delta, invert }) => (
 const AnalyticsWorkspace = ({ data, filters }) => {
   const router = useRouter();
   const params = useSearchParams();
+  // The navigation a filter change causes is a server round trip. Tracking it
+  // lets the chart say it is working on it instead of sitting on figures that
+  // no longer match the control above them.
+  const [pending, startTransition] = useTransition();
 
   const { current, previous, categories, flow, accounts, period, hasAnyTransactions, hasPriorData } =
     data;
@@ -75,7 +81,9 @@ const AnalyticsWorkspace = ({ data, filters }) => {
     const next = new URLSearchParams(params.toString());
     if (!value || value === ALL) next.delete(key);
     else next.set(key, value);
-    router.replace(`/analytics?${next.toString()}`, { scroll: false });
+    startTransition(() => {
+      router.replace(`/analytics?${next.toString()}`, { scroll: false });
+    });
   };
 
   const savings =
@@ -228,6 +236,13 @@ const AnalyticsWorkspace = ({ data, filters }) => {
               />
             </div>
           </section>
+
+          <CashflowSankey
+            cashflow={data.cashflow}
+            range={filters.cash}
+            onRangeChange={(value) => setParam("cash", value)}
+            busy={pending}
+          />
 
           <FlowChart flow={flow} />
 

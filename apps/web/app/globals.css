@@ -1264,3 +1264,205 @@ html {
     transition: none;
   }
 }
+
+/* Hero chart backdrop.
+ *
+ * The colours live here rather than on the elements because the drawing has
+ * to answer to the theme, and the site's theme is a class on <html>. The hue
+ * is the theme's own ink in both themes -- the drawing is colourless -- so
+ * what these variables carry is weight: on white the line needs about half
+ * opacity to read as a line and not as a smudge, and on the dark surface it
+ * needs more to survive against it. The dot inverts with the theme, near-black
+ * on white and white on the dark surface, for the same reason.
+ *
+ * Everything is scoped under [data-hero-chart] so none of it leaks. */
+:root,
+.theme-light {
+  --hero-chart-presence: 0.3;
+  --hero-chart-line-opacity: 0.5;
+  --hero-chart-area-opacity: 0.05;
+  --hero-chart-dot: 15 23 42;
+  --hero-chart-glow-opacity: 0.22;
+}
+
+.dark {
+  --hero-chart-presence: 0.36;
+  --hero-chart-line-opacity: 0.78;
+  --hero-chart-area-opacity: 0.12;
+  --hero-chart-dot: 255 255 255;
+  --hero-chart-glow-opacity: 0.4;
+}
+
+/* How present the drawing is, as one number rather than six.
+ *
+ * Asked for directly: it is a background and it was competing with the copy
+ * in front of it. Dimming the whole thing here keeps every element's relative
+ * weight -- the line still leads, the grid still trails, the dot is still the
+ * crisp thing -- where tuning six opacities by hand would not. And because
+ * the chart sits behind the text rather than over it, lowering this can only
+ * widen the contrast margins, never narrow them. */
+[data-hero-chart] {
+  opacity: var(--hero-chart-presence);
+}
+
+/* The background arrives second, by request. The hero's markup is all server
+   rendered, so there is no load order to arrange -- the chart is in the same
+   HTML as the headline -- but there is a paint order, and this is it: the
+   copy, the buttons and the dashboard land first and the chart fades up
+   behind them a beat later. It is also the cheapest thing that can happen to
+   the LCP element, since during the delay the background is not painted at
+   all.
+
+   `backwards` is what holds it at nothing through the delay instead of
+   letting it flash in and then start. One pass, on load, and then it is
+   finished: the chart itself still does not move. With motion reduced the
+   rule never applies and it is simply there from the start. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-hero-chart] {
+    animation: heroChartIn 0.7s ease-out 0.45s backwards;
+  }
+}
+
+@keyframes heroChartIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* non-scaling-stroke throughout: the viewBox is scaled by viewport width, so
+   without it a 1.4px hairline renders at about 0.4px on a phone and vanishes.
+   This keeps every stroke the same weight on screen at every size. */
+[data-hero-chart] line,
+[data-hero-chart] path {
+  vector-effect: non-scaling-stroke;
+}
+
+/* The grid's colour lives on the gradient's stops, because the stroke is a
+   gradient (see hero-chart-grid-fade) rather than a flat colour. */
+[data-hero-chart] .hero-chart-grid-stop {
+  stop-color: hsl(var(--foreground) / 0.08);
+}
+
+/* The line's and the wash's stops. Both are the page's own ink, and the
+   gradients vary only its opacity -- there is no hue on this drawing at all.
+   Asked for: a coloured chart behind a blue-to-purple headline gave the hero
+   two things fighting to be the colourful one. */
+[data-hero-chart] .hero-chart-ink-stop {
+  stop-color: hsl(var(--foreground));
+}
+
+[data-hero-chart] .hero-chart-grid line {
+  stroke-width: 1;
+}
+
+/* Both the group of standing guides and the single dashed drop from the
+   callout to its point, which is one <line> rather than a group. */
+[data-hero-chart] .hero-chart-guide line,
+[data-hero-chart] line.hero-chart-guide {
+  stroke: hsl(var(--foreground) / 0.09);
+  stroke-width: 1;
+  stroke-dasharray: 4 7;
+}
+
+/* The standing guides take the same centre fade as the grid; the one dashed
+   drop from the callout does not, because it is out at the right-hand edge
+   with nothing behind it. */
+[data-hero-chart] .hero-chart-guide line {
+  stroke: url(#hero-chart-grid-fade);
+}
+
+/* That drop is the one line here that is meant to be followed -- it ties the
+   reading to the point it is a reading of -- so it is carried well above the
+   standing guides rather than at their weight. At the strength they share it
+   disappeared entirely once the whole drawing was dimmed. */
+[data-hero-chart] line.hero-chart-guide {
+  stroke: hsl(var(--foreground) / 0.4);
+  stroke-dasharray: 3 5;
+}
+
+[data-hero-chart] .hero-chart-axis-label text {
+  fill: hsl(var(--muted-foreground) / 0.6);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+[data-hero-chart] .hero-chart-line {
+  stroke-width: 1.6;
+  opacity: var(--hero-chart-line-opacity);
+}
+
+[data-hero-chart] .hero-chart-area {
+  opacity: var(--hero-chart-area-opacity);
+}
+
+[data-hero-chart] .hero-chart-dot {
+  fill: rgb(var(--hero-chart-dot));
+  opacity: 0.95;
+}
+
+/* The blur is wide and soft, and it sits under the line rather than on it:
+   stroke-width here is the spread of the bloom, not of the stroke. */
+[data-hero-chart] .hero-chart-glow {
+  stroke-width: 5;
+  opacity: var(--hero-chart-glow-opacity);
+}
+
+[data-hero-chart] .hero-chart-callout {
+  fill: hsl(var(--background) / 0.72);
+  stroke: hsl(var(--border));
+  stroke-width: 1;
+}
+
+[data-hero-chart] .hero-chart-callout-label {
+  fill: hsl(var(--muted-foreground) / 0.8);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-hero-chart] .hero-chart-callout-value {
+  fill: hsl(var(--foreground) / 0.82);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* The reference's change figure, which was its green. It is the page's muted
+   ink here instead: the drawing carries no hue, and a single green figure on
+   an otherwise colourless chart would have been the loudest thing on it. */
+[data-hero-chart] .hero-chart-callout-change {
+  fill: hsl(var(--muted-foreground));
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* The drawing does not move. There is no draw-on, no settle, no travelling
+   highlight and no pulse: it is a still chart behind the copy, by request.
+   The one animation left is the fade-in above, which runs once on load and
+   changes nothing but opacity. */
+
+/* The dashboard walkthrough's shadow.
+ *
+ * Not Tailwind's shadow-sm, which the frame used to carry and which is
+ * invisible at this size -- the reference lifts the panel off the page. Two
+ * layers: a wide, low-opacity cast that gives the height, and a tighter one
+ * directly beneath the edge that gives it a contact point. Both are tinted
+ * toward the brand's indigo rather than neutral grey, because a pure black
+ * shadow on a white page reads as dirt.
+ *
+ * Dark mode cannot use the same trick -- a black shadow on a near-black page
+ * is nothing -- so there it is a violet bloom plus a hairline of light along
+ * the top edge, which is what separates the panel from the page in the
+ * reference's dark variant. */
+.hero-demo-shadow {
+  box-shadow:
+    0 32px 64px -24px rgb(49 46 129 / 0.28),
+    0 12px 28px -16px rgb(15 23 42 / 0.2);
+}
+
+.dark .hero-demo-shadow {
+  box-shadow:
+    0 36px 80px -28px rgb(0 0 0 / 0.85),
+    0 20px 60px -32px rgb(124 58 237 / 0.55),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+}

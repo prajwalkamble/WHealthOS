@@ -11,6 +11,7 @@
 
 import {
   APP_TIME_ZONE,
+  dayWindowBounds,
   monthBounds,
   monthBoundsFor,
   monthName,
@@ -18,13 +19,17 @@ import {
   zonedYearMonth,
 } from "@/lib/time";
 import {
+  CASHFLOW_RANGES,
+  cashflowSummary,
   categoryBreakdown,
   change,
   monthlyFlow,
   monthWindow,
   periodTotals,
+  resolveCashflowRange,
   windowBounds,
 } from "@/lib/analytics";
+import { defaultCategories } from "@/data/categories";
 import { budgetPace, budgetTotals, periodProgress } from "@/lib/budget-pace";
 import { withCurrentTenant } from "@/lib/prisma";
 import { SECTIONS } from "@/lib/ai/intent";
@@ -543,6 +548,11 @@ export async function getGoalContributions(goalId) {
   });
 }
 
+// The category ids the app knows. Anything else on a row -- a category that
+// was renamed, or an import that brought its own -- is drawn as uncategorised
+// rather than as a node with an id for a name.
+const KNOWN_CATEGORY_IDS = new Set(defaultCategories.map((c) => c.id));
+
 // Everything the Analytics page needs, in one transaction.
 //
 // Rows are fetched once for the whole window and aggregated in lib/analytics.js
@@ -553,8 +563,17 @@ export async function getGoalContributions(goalId) {
 // `months` is clamped so a crafted value cannot ask for an unbounded range.
 // Filters are applied in the query, and withCurrentTenant scopes every read to
 // the caller, so an accountId belonging to someone else returns nothing.
-export async function getAnalytics({ months = 6, accountId = null, type = null } = {}) {
+// `cashflow` is the Sankey's own range key and is resolved, not trusted: an
+// unknown value falls back to the default rather than widening the query.
+export async function getAnalytics({
+  months = 6,
+  accountId = null,
+  type = null,
+  cashflow = null,
+} = {}) {
   const span = Math.min(Math.max(Number(months) || 6, 2), 24);
+  const cashflowKey = resolveCashflowRange(cashflow);
+  const cashflowWindow = dayWindowBounds(CASHFLOW_RANGES[cashflowKey].days);
 
   return withCurrentTenant(async (tx, userId) => {
     const window = monthWindow(span);
@@ -567,14 +586,20 @@ export async function getAnalytics({ months = 6, accountId = null, type = null }
     const currentBounds = monthBoundsFor(currentMonth.year, currentMonth.month);
     const priorBounds = monthBoundsFor(priorMonth.year, priorMonth.month);
 
-    const from =
+    // One query for both aggregations, so the Sankey costs no extra round
+    // trip: its window can start before the month window does (a year of days
+    // against three months of history), so the lower bound takes whichever is
+    // earliest and the rows are split by date afterwards.
+    const monthFrom =
       priorBounds.startOfMonth < startOfMonth ? priorBounds.startOfMonth : startOfMonth;
+    const from = cashflowWindow.from < monthFrom ? cashflowWindow.from : monthFrom;
+    const to = cashflowWindow.to > endOfMonth ? cashflowWindow.to : endOfMonth;
 
     const [rows, accounts] = await Promise.all([
       tx.transaction.findMany({
         where: {
           userId,
-          date: { gte: from, lte: endOfMonth },
+          date: { gte: from, lte: to },
           ...(accountId ? { accountId } : {}),
           ...(type ? { type } : {}),
         },
@@ -600,7 +625,10 @@ export async function getAnalytics({ months = 6, accountId = null, type = null }
     return {
       span,
       accounts,
-      hasAnyTransactions: transactions.length > 0,
+      // Of the month window, not of everything fetched: the Sankey's window
+      // can reach further back, and a row from outside the months being
+      // analysed must not make the page claim it has data for them.
+      hasAnyTransactions: inRange(monthFrom, endOfMonth).length > 0,
       // Whether a comparison is possible at all, so the page can say "not
       // enough data" instead of printing a change against nothing.
       hasPriorData: prior.length > 0,
@@ -608,6 +636,17 @@ export async function getAnalytics({ months = 6, accountId = null, type = null }
       current: periodTotals(current),
       previous: periodTotals(prior),
       categories: categoryBreakdown(current, prior),
+      // The Sankey reads its own window, and the same filters: an account or
+      // type chosen above applies to every figure on the page, this one
+      // included.
+      cashflow: {
+        range: cashflowKey,
+        from: cashflowWindow.from,
+        to: cashflowWindow.to,
+        ...cashflowSummary(inRange(cashflowWindow.from, cashflowWindow.to), {
+          knownCategories: KNOWN_CATEGORY_IDS,
+        }),
+      },
       period: {
         label: monthName(currentMonth.year, currentMonth.month),
         year: currentMonth.year,
@@ -708,6 +747,7 @@ export async function getMyRating() {
     return rating?.score ?? null;
   });
 }
+
 // --- WHOS -------------------------------------------------------------
 
 // Spending per category this month and last, so a question about what changed

@@ -118,7 +118,7 @@ const DashboardProductDemo = ({ className }) => {
         // numbers are sample data, so there is nothing here worth protecting
         // harder than this.
         className={cn(
-          "relative min-h-[26rem] select-none overflow-hidden rounded-xl border text-left shadow-sm sm:min-h-[34rem] lg:min-h-[41rem]",
+          "hero-demo-shadow relative min-h-[26rem] select-none overflow-hidden rounded-xl border text-left sm:min-h-[34rem] lg:min-h-[41rem]",
           // text-foreground as well as bg-background: body resolves
           // text-foreground against the SITE's tokens, and plain text inherits
           // that resolved colour rather than re-reading the variable under the
@@ -273,14 +273,6 @@ const DashboardProductDemo = ({ className }) => {
 
         <DemoCursor ref={cursorRef} />
       </div>
-
-      <figcaption className="mt-3 text-xs text-muted-foreground">
-        The WHealthOS dashboard, running on sample data.{" "}
-        <a href="/demo" className="underline underline-offset-2 hover:text-foreground">
-          Open the live demo
-        </a>
-        .
-      </figcaption>
     </figure>
   );
 };

@@ -13,6 +13,7 @@ export default async function AnalyticsPage({ searchParams }) {
     months: params?.months,
     accountId: params?.account || null,
     type: params?.type || null,
+    cashflow: params?.cash || null,
   });
 
   return (
@@ -22,6 +23,7 @@ export default async function AnalyticsPage({ searchParams }) {
         months: String(data.span),
         account: params?.account ?? "",
         type: params?.type ?? "",
+        cash: data.cashflow.range,
       }}
     />
   );

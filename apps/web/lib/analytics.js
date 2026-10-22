@@ -143,3 +143,168 @@ export function periodTotals(rows) {
     savingsRate: income > 0 ? (net / income) * 100 : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Cashflow
+//
+// The Sankey on the Analytics page: income on the left, one pool in the
+// middle, expenses and whatever is left over on the right.
+//
+// What the shape does and does not claim
+// --------------------------------------
+// A Sankey normally says "this much of that flowed into this". The ledger here
+// cannot support that claim: a transaction has a type, an amount, a date and a
+// category, and nothing records that a particular salary payment paid a
+// particular rent. Drawing Salary straight through to Housing would be an
+// invention.
+//
+// So every income category flows into one node and every expense category
+// flows out of it. That is arithmetic rather than attribution: it says only
+// that the period took in this much in total and paid out this much in total,
+// which is exactly what the rows support. The middle node is the period's
+// cash, not an account and not a balance.
+//
+// When the period spends more than it earns there is no surplus to draw, and
+// the difference did not come from income. It is shown as its own inflow --
+// money drawn from what was already there -- so the diagram balances without
+// claiming the period funded itself.
+//
+// Period, not balance: everything here is the movement inside the window. It
+// is not what anyone has.
+
+// The ranges the chart offers, in the vocabulary the account chart already
+// uses, with a year added because a cashflow is worth seeing annually.
+export const CASHFLOW_RANGES = {
+  "7D": { days: 7, label: "Last 7 days" },
+  "1M": { days: 30, label: "Last 30 days" },
+  "3M": { days: 90, label: "Last 90 days" },
+  "6M": { days: 180, label: "Last 180 days" },
+  "1Y": { days: 365, label: "Last 12 months" },
+};
+
+export const DEFAULT_CASHFLOW_RANGE = "1M";
+
+export function resolveCashflowRange(key) {
+  return Object.hasOwn(CASHFLOW_RANGES, String(key)) ? String(key) : DEFAULT_CASHFLOW_RANGE;
+}
+
+// What a transaction with no usable category is filed under. The id is not one
+// of data/categories.js's, deliberately: it is this chart's own bucket and
+// nothing else should pick it up as a real category.
+export const UNCATEGORIZED = "__uncategorized__";
+
+// The three nodes that are not categories. Namespaced for the same reason.
+export const POOL = "__pool__";
+export const SURPLUS = "__surplus__";
+export const DRAWN_FROM_BALANCES = "__drawn__";
+
+const bucketKey = (category, known) => {
+  const id = typeof category === "string" ? category.trim() : "";
+  if (!id) return UNCATEGORIZED;
+  return known && !known.has(id) ? UNCATEGORIZED : id;
+};
+
+// Income and expenses for one window, grouped by category.
+//
+// `knownCategories` is optional: when given, a category outside it is filed as
+// uncategorised rather than drawn as a node nobody can name.
+//
+// Rows are counted once each. Nothing is filtered by status, which is what
+// every other figure on this page does -- changing that here would make the
+// chart disagree with the totals directly above it.
+//
+// A category whose rows net to zero or less cannot be drawn: a ribbon has no
+// negative width. Those are excluded from the diagram and reported separately
+// so the caller can say so rather than quietly dropping money.
+export function cashflowSummary(transactions, { knownCategories = null } = {}) {
+  const income = new Map();
+  const expenses = new Map();
+
+  for (const row of transactions) {
+    const side = row.type === "INCOME" ? income : expenses;
+    const key = bucketKey(row.category, knownCategories);
+    const amount = Number(row.amount) || 0;
+    side.set(key, (side.get(key) ?? 0) + amount);
+  }
+
+  const split = (map) => {
+    const drawn = [];
+    const excluded = [];
+    for (const [key, amount] of map) {
+      (amount > 0 ? drawn : excluded).push({ key, amount });
+    }
+    drawn.sort((a, b) => b.amount - a.amount);
+    return { drawn, excluded };
+  };
+
+  const sources = split(income);
+  const destinations = split(expenses);
+  const total = (rows) => rows.reduce((sum, row) => sum + row.amount, 0);
+
+  // Totals are of what is drawn, so the diagram balances: a ribbon out of the
+  // pool for every rupee into it. `excluded` carries the rest.
+  const incomeTotal = total(sources.drawn);
+  const expenseTotal = total(destinations.drawn);
+  const net = incomeTotal - expenseTotal;
+
+  return {
+    sources: sources.drawn,
+    destinations: destinations.drawn,
+    excluded: [...sources.excluded, ...destinations.excluded],
+    income: incomeTotal,
+    expenses: expenseTotal,
+    net,
+    // Only one of these is ever non-zero. Surplus is what the period did not
+    // spend; drawn is what it spent beyond what it took in, which came from
+    // money that was already there.
+    surplus: net > 0 ? net : 0,
+    drawnFromBalances: net < 0 ? -net : 0,
+    transactionCount: transactions.length,
+  };
+}
+
+// The diagram's own shape: which node is where, and what joins them.
+//
+// Here rather than in the component because it is index arithmetic over
+// amounts, which is the kind of thing that breaks silently and is worth a
+// test. It carries no names and no colours -- a node is a key and a side, and
+// the drawing decides what either looks like.
+//
+// Node order is inflows, pool, outflows. Recharts derives depth from the links
+// rather than from this order, but keeping it in reading order makes the data
+// legible and the indexes stable.
+export function cashflowDiagram({ sources, destinations, surplus, drawnFromBalances }) {
+  const inflows = [
+    ...sources.map(({ key, amount }) => ({ key, amount })),
+    ...(drawnFromBalances > 0 ? [{ key: DRAWN_FROM_BALANCES, amount: drawnFromBalances }] : []),
+  ];
+  const outflows = [
+    ...destinations.map(({ key, amount }) => ({ key, amount })),
+    ...(surplus > 0 ? [{ key: SURPLUS, amount: surplus }] : []),
+  ];
+
+  if (inflows.length === 0 && outflows.length === 0) {
+    return { nodes: [], links: [] };
+  }
+
+  const pooled = inflows.reduce((sum, row) => sum + row.amount, 0);
+  const nodes = [
+    ...inflows.map((row) => ({ ...row, side: "source" })),
+    { key: POOL, side: "pool", amount: pooled },
+    ...outflows.map((row) => ({ ...row, side: "destination" })),
+  ];
+  const pool = inflows.length;
+
+  return {
+    nodes,
+    links: [
+      ...inflows.map((row, i) => ({ source: i, target: pool, value: row.amount, key: row.key })),
+      ...outflows.map((row, i) => ({
+        source: pool,
+        target: pool + 1 + i,
+        value: row.amount,
+        key: row.key,
+      })),
+    ],
+  };
+}

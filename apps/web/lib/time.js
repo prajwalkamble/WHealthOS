@@ -56,6 +56,29 @@ export function zonedMidnight(year, month, day = 1, timeZone = APP_TIME_ZONE) {
   return new Date(wallClock - offsetMs(new Date(firstGuess), timeZone));
 }
 
+// The calendar day of the month that `date` falls on, in the zone.
+export function zonedDayOfMonth(date = new Date(), timeZone = APP_TIME_ZONE) {
+  return zonedParts(date, timeZone).day;
+}
+
+// A window of whole days ending with the day `now` falls on, in the zone.
+//
+// Inclusive of both ends and of today: `days: 7` is today and the six days
+// before it, 00:00:00.000 to 23:59:59.999 on the zone's clock, not a rolling
+// 168 hours from the current instant. A range that moved with the clock would
+// give a different total every time the page was reloaded.
+//
+// Date.UTC normalises a day index out of range, so subtracting past the first
+// of the month rolls into the previous one without any arithmetic here.
+export function dayWindowBounds(days, now = new Date(), timeZone = APP_TIME_ZONE) {
+  const { year, month } = zonedYearMonth(now, timeZone);
+  const day = zonedDayOfMonth(now, timeZone);
+  return {
+    from: zonedMidnight(year, month, day - (days - 1), timeZone),
+    to: new Date(zonedMidnight(year, month, day + 1, timeZone).getTime() - 1),
+  };
+}
+
 // The calendar { year, month } (month 0-11) that `date` falls in, in the zone.
 export function zonedYearMonth(date = new Date(), timeZone = APP_TIME_ZONE) {
   const { year, month } = zonedParts(date, timeZone);
