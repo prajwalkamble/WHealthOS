@@ -42,9 +42,49 @@ export const WidgetFooter = ({ className, children }) => (
   </footer>
 );
 
-// Percentage change as an outlined pill -- "↗ 12.5%" -- coloured by whether
-// the direction is good news. goodWhenUp is false for things like expenses.
-export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", className }) => {
+// Below this a change is treated as no change, so a rounding artefact does not
+// render as a trend. Shared with the label so the two cannot drift apart.
+const FLAT_BELOW = 0.05;
+
+// Above this a percent change is written as a multiplier instead.
+const MULTIPLIER_ABOVE = 100;
+
+// How a change is written on a badge.
+//
+// A percent change has no ceiling. Spending 4.94 times last month's total is
+// +394%, which is arithmetically correct and still the wrong thing to print:
+// a bare "394%" sitting beside a rupee figure reads as a share of something,
+// and nothing on this dashboard is 394% of anything. Past a doubling the
+// ratio states the same fact more plainly, so anything above +100% becomes a
+// multiplier and no percentage over 100 is ever shown.
+//
+// Opt in with `multiplier`, because most values here should not take it. A
+// savings rate's change is a difference in percentage points rather than a
+// ratio, so 150 of them are not 2.5× of anything; a balance is read as growth
+// against the 1st, and one that crosses zero has no sensible multiple at all.
+// Only a flow compared with the same flow last month -- what the expenses
+// card shows -- is a ratio that stays meaningful once it passes a doubling.
+export const trendLabel = (value, { suffix = "%", multiplier = false } = {}) => {
+  if (!Number.isFinite(value) || Math.abs(value) < FLAT_BELOW) return `0${suffix}`;
+
+  if (multiplier && value > MULTIPLIER_ABOVE) {
+    const times = 1 + value / 100;
+    if (times >= 1000) return ">999×";
+    return times < 100 ? `${times.toFixed(1)}×` : `${Math.round(times)}×`;
+  }
+
+  // A fall is bounded at -100% for any quantity that cannot go negative, so
+  // these stay percentages; only a balance crossing zero reaches past it.
+  const magnitude = Math.abs(value);
+  if (magnitude > 999) return `>999${suffix}`;
+  if (magnitude >= 100) return `${Math.round(magnitude)}${suffix}`;
+  return `${magnitude.toFixed(1)}${suffix}`;
+};
+
+// A change as an outlined pill -- "↗ 12.5%", or "↗ 4.9×" for a caller that asked
+// for `multiplier` -- coloured by whether the direction is good news. goodWhenUp
+// is false for things like expenses.
+export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", multiplier = false, className }) => {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return (
       <span
@@ -59,7 +99,7 @@ export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", className }
     );
   }
 
-  const flat = Math.abs(value) < 0.05;
+  const flat = Math.abs(value) < FLAT_BELOW;
   const good = flat || (value > 0) === goodWhenUp;
   const Icon = flat ? Minus : value > 0 ? TrendingUp : TrendingDown;
 
@@ -76,13 +116,7 @@ export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", className }
       )}
     >
       <Icon className="h-3 w-3" />
-      {flat
-        ? `0${suffix}`
-        : Math.abs(value) > 999
-          ? `>999${suffix}`
-          : Math.abs(value) >= 100
-            ? `${Math.round(Math.abs(value))}${suffix}`
-            : `${Math.abs(value).toFixed(1)}${suffix}`}
+      {trendLabel(value, { suffix, multiplier })}
     </span>
   );
 };

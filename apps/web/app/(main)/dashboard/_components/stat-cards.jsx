@@ -122,7 +122,16 @@ function expensesBadge({ hasTransactions, income, expenses, previous }) {
   }
   if (previous > 0) {
     return {
-      badge: <TrendBadge value={percentChange(expenses, previous)} goodWhenUp={false} />,
+      // Spending against the same month's spending is a ratio, so once it passes
+      // a doubling the multiple reads better than a percentage with no ceiling:
+      // 4.9× rather than 394%, which invites being read as a share of something.
+      badge: (
+        <TrendBadge
+          value={percentChange(expenses, previous)}
+          goodWhenUp={false}
+          multiplier
+        />
+      ),
       caption: `vs ${formatCurrency(previous)} last month`,
     };
   }
