@@ -15,8 +15,8 @@ export const TERMS = {
 
   // --- Commercial position, verified -------------------------------------
   //
-  // data/pricing.js advertises Free (₹0), Pro (₹299/mo) and Intelligent
-  // (₹599/mo). None of them can be bought: all three CTAs link to /sign-up,
+  // data/pricing.js advertises Free (₹0), Pro (₹399/mo) and Intelligent
+  // (₹699/mo). None of them can be bought: all three CTAs link to /sign-up,
   // there is no payment processor anywhere in the codebase, no subscription or
   // plan model in the Prisma schema, and no plan gating in application code.
   // The advertised per-day transaction limits are not enforced either -- the

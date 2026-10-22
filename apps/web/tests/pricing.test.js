@@ -27,24 +27,24 @@ describe("plan catalogue", () => {
 describe("priceFor", () => {
   it("shows the monthly price per month", () => {
     expect(priceFor(plan("pro"), "monthly")).toMatchObject({
-      amount: 299,
+      amount: 399,
       suffix: "/ month",
     });
     expect(priceFor(plan("intelligent"), "monthly")).toMatchObject({
-      amount: 599,
+      amount: 699,
       suffix: "/ month",
     });
   });
 
   it("charges twelve months less the discount, yearly", () => {
     const pro = priceFor(plan("pro"), "yearly");
-    expect(pro.full).toBe(299 * 12); // 3588
-    expect(pro.amount).toBe(2870); // 3588 less 20%
+    expect(pro.full).toBe(399 * 12); // 4788
+    expect(pro.amount).toBe(3830); // 4788 less 20%
     expect(pro.suffix).toBe("/ year");
 
     const intelligent = priceFor(plan("intelligent"), "yearly");
-    expect(intelligent.full).toBe(599 * 12); // 7188
-    expect(intelligent.amount).toBe(5750); // 7188 less 20%
+    expect(intelligent.full).toBe(699 * 12); // 8388
+    expect(intelligent.amount).toBe(6710); // 8388 less 20%
   });
 
   it("saves exactly the advertised percentage", () => {
