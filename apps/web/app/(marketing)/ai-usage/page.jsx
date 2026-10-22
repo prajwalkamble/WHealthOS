@@ -12,7 +12,7 @@ import {
 export const metadata = {
   title: "AI Usage | WHealthOS",
   description:
-    "The two places WHealthOS uses AI, exactly what each one sends to Google, what it sends back, and what it gets wrong.",
+    "The three places WHealthOS uses AI, exactly what each one sends to Google, what it sends back, and what it gets wrong.",
   alternates: { canonical: "/ai-usage" },
 };
 
@@ -79,14 +79,17 @@ export default function AiUsagePage() {
               entered, by code that produces the same answer every time.
             </P>
             <P>
-              Two things are not arithmetic. One reads a receipt photo so you
-              do not have to type it out. The other writes a few sentences of
-              commentary in the monthly summary email. Both send information to
-              a model run by Google. There is nothing else — no assistant, no
-              chat, no model watching what you do.
+              Three things are not arithmetic. One reads a receipt photo so you
+              do not have to type it out. One writes a few sentences of
+              commentary in the monthly summary email. The third is an
+              assistant you can ask questions, which is given figures the app
+              has already calculated and puts them into words. All three send
+              information to a model run by Google. There is nothing else — no
+              model watching what you do, and nothing that runs on your records
+              unless you ask it to or have left the monthly commentary on.
             </P>
             <P>
-              This page describes those two features as they work today, by
+              This page describes those three features as they work today, by
               reference to the code that implements them. It says what is sent,
               what comes back, who checks it, and what it does badly. Where
               something is not known, it says that instead of guessing.
@@ -95,7 +98,7 @@ export default function AiUsagePage() {
 
           <Section id="features" number="2" title="What uses AI today">
             <P>
-              {AI_FACTS.featureCount === 2 ? "Two features, and no others." : null}{" "}
+              {AI_FACTS.featureCount === 3 ? "Three features, and no others." : null}{" "}
               Each one is set out the same way: when it runs, what leaves
               WHealthOS, what does not, and what it gets wrong.
             </P>
@@ -128,10 +131,13 @@ export default function AiUsagePage() {
               </div>
             ))}
             <Callout>
-              <strong>The difference between the two matters.</strong> You start
-              a receipt scan and you approve its result. The monthly commentary
-              is produced for you automatically unless you switch it off, and
-              it is on until you do. Section 7 is where to change that.
+              <strong>The differences between them matter.</strong> You start a
+              receipt scan and you approve its result. You start every question
+              you ask the assistant, and nothing is kept afterwards — but its
+              answer is never checked by anyone before you read it. The monthly
+              commentary is the odd one out: it is produced for you
+              automatically unless you switch it off, and it is on until you
+              do. Section 7 is where to change that.
             </Callout>
           </Section>
 
@@ -155,21 +161,29 @@ export default function AiUsagePage() {
                 produce the same figures.
               </Item>
               <Item>
-                <strong>What is sent to the model</strong> is the narrow slice
-                each feature needs: one receipt image, or one month of category
-                totals. Nothing accumulates between calls, and no call is given
-                the output of a previous one.
+                <strong>What is sent to the model</strong> is the slice each
+                feature needs: one receipt image, one month of category totals,
+                or — when you ask the assistant something about your money —
+                the already-calculated totals that answer that question. Never
+                an individual transaction, and never a database query. The
+                assistant is the one case where figures accumulate within a
+                call, because a follow-up question carries the last few
+                messages of your conversation with it; nothing accumulates
+                between conversations, and nothing is stored.
               </Item>
               <Item>
                 <strong>What comes back</strong> is a draft for you to approve,
-                in the case of a receipt, or sentences in an email, in the case
-                of the monthly summary. Neither changes a stored record on its
-                own.
+                in the case of a receipt; sentences in an email, in the case of
+                the monthly summary; or an answer on your screen, in the case
+                of the assistant. None of them changes a stored record.
               </Item>
             </List>
             <P>
               A model cannot edit, delete or add a transaction. The receipt
-              scanner fills a form; you are the one who saves it.
+              scanner fills a form; you are the one who saves it. The assistant
+              has no way to write anything at all — it is handed figures and
+              returns words, and there is no mechanism by which an answer could
+              move money, change a budget or alter a setting.
             </P>
           </Section>
 
@@ -256,16 +270,18 @@ export default function AiUsagePage() {
               an assessment.
             </P>
             <P>
-              What the two features do is narrower than that. One proposes the
-              contents of a form. The other remarks on figures you can already
-              see for yourself.
+              What the three features do is narrower than that. One proposes
+              the contents of a form. One remarks on figures you can already
+              see for yourself. The third answers a question about those same
+              figures, and can neither change them nor act on them.
             </P>
             <P>
-              WHealthOS is not a financial adviser, and the commentary in a
-              monthly email is not advice. It has no knowledge of your
-              circumstances, your plans or anything outside the totals it was
-              given, and it should not be the reason you do anything with your
-              money.
+              WHealthOS is not a financial adviser. Neither the commentary in a
+              monthly email nor an answer from the assistant is advice. Both
+              work from totals and nothing else — they know nothing of your
+              circumstances, your plans or anything outside the figures they
+              were handed, and neither should be the reason you do anything
+              with your money.
             </P>
           </Section>
 
@@ -280,6 +296,15 @@ export default function AiUsagePage() {
                 only when you choose a photo. Never use it and no image is ever
                 sent. You review every result before it is saved, and you can
                 change or discard any part of it.
+              </Item>
+              <Item>
+                <strong>The assistant runs only when you ask it something.</strong>{" "}
+                Open the panel and nothing is sent; close it without typing and
+                nothing was. Each question sends only the figures that question
+                needs, and a question about a financial idea rather than about
+                your money sends none of them. Nothing from a conversation is
+                stored once you close the tab — which also means there is no
+                history for you to go back to.
               </Item>
               <Item>
                 <strong>The monthly commentary can be switched off,</strong> in
@@ -311,7 +336,8 @@ export default function AiUsagePage() {
               </Item>
               <Item>
                 <strong>Reporting a bad result</strong> — an amount read wrong,
-                commentary that misrepresents your month — goes to the same
+                commentary that misrepresents your month, an answer that quoted
+                a figure that is not yours — goes to the same
                 address. It is worth telling us; it is how we find out that
                 something has started failing.
               </Item>

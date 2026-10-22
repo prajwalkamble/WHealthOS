@@ -58,16 +58,26 @@ export const TERMS = {
 
   // --- AI, verified ------------------------------------------------------
   //
-  // lib/ai/gemini.js, model gemini-4-argon. Two callers:
+  // lib/ai/gemini.js, model gemini-4-argon by default (GEMINI_MODEL
+  // overrides it per deployment). Three callers:
   //   actions/transaction.js   -- the uploaded receipt image, on request.
   //   lib/inngest/functions.js -- generateFinancialInsights sends the month's
   //     income, expenses and per-category totals, on a cron, to every user
   //     who has an email address and has not switched the commentary off.
   //     The switch is users.monthlyInsights, added 2026-10-11 and surfaced in
   //     Settings; it defaults to on, so the default behaviour is unchanged.
+  //   lib/ai/agent.js          -- WHOS. The question the person typed,
+  //     the last few turns of the conversation, and the totals their question
+  //     needs, assembled by lib/ai/context.js. Entirely on request: no
+  //     schedule, no background call, and nothing persisted. Added
+  //     2026-10-19.
   aiProvider: "Google (Gemini)",
   monthlyInsightsAutomatic: true,
   monthlyInsightsCanBeSwitchedOff: true,
+  // The assistant needs no switch: it sends nothing unless a question is
+  // sent, which is the same reasoning that covers the receipt scanner.
+  assistantOnRequestOnly: true,
+  assistantConversationsPersisted: false,
 
   // --- Decisions the operator has taken ----------------------------------
   //

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-labelledby="whos-mark-mono-title">
+  <title id="whos-mark-mono-title">WHOS</title>
+  <!-- Takes the colour of whatever it is placed in, so one file serves light
+       mode, dark mode and every palette the theme customiser offers. -->
+  <path fill="currentColor" d="M3.000 6.440L9.960 25.520L11.860 25.560L16.000 15.560L20.140 25.560L22.040 25.520L29.000 6.440L24.860 6.440L20.910 17.270L16.900 7.570L15.100 7.570L11.090 17.270L7.140 6.440Z"/>
+</svg>

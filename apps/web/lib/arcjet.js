@@ -1,5 +1,6 @@
 import arcjet, { request, tokenBucket } from "@arcjet/next";
 import { ActionError } from "./action-error";
+import { AGENT_LIMITS } from "./ai/agent-config";
 
 const aj = arcjet({
   key: process.env.ARCJET_KEY,
@@ -23,6 +24,23 @@ const limiters = {
   ),
   account: aj.withRule(
     tokenBucket({ mode: "LIVE", refillRate: 10, interval: 3600, capacity: 10 })
+  ),
+  // Every WHOS question is a Gemini request that bills per token in and
+  // per token out, which makes this the most expensive thing a signed-in
+  // person can do and the only one whose cost is unbounded without a limit.
+  // Both numbers come from lib/ai/agent-config.js so an operator can set them
+  // from the environment without editing a rate-limit rule.
+  //
+  // Capacity below the hourly rate on purpose: it caps a burst -- a stuck
+  // client retrying in a loop -- while still allowing a normal back-and-forth
+  // conversation over an hour.
+  aiChat: aj.withRule(
+    tokenBucket({
+      mode: "LIVE",
+      refillRate: AGENT_LIMITS.requestsPerHour,
+      interval: 3600,
+      capacity: AGENT_LIMITS.burst,
+    })
   ),
   // Edits, deletes, default-account, budget and rating changes.
   write: aj.withRule(

@@ -267,7 +267,17 @@ export default function TermsPage() {
               conclusions about you with anyone.
             </P>
             <P>
-              The two features differ in a way worth knowing. The receipt
+              WHOS - Financial Intelligence, the assistant, is the third. It runs only when you
+              send it a question, and that question travels to Google together
+              with the already-calculated totals needed to answer it — never an
+              individual transaction. Nothing from the conversation is stored:
+              it exists in your browser tab and ends when you close it. Its
+              answers are written by the model and are not checked by anyone
+              before you read them, it cannot change anything in your account,
+              and nothing it says is advice.
+            </P>
+            <P>
+              The three differ in a way worth knowing. The receipt
               scanner runs only when you upload a photo, so you control it
               completely: upload nothing and no image ever leaves WHealthOS.
               The monthly summary is not like that. It is produced for every

@@ -274,7 +274,31 @@ export default function PrivacyPage() {
               <Link href={AI_USAGE_LINK} className="underline underline-offset-4">
                 AI Usage page
               </Link>{" "}
-              sets out both features in full, including what they get wrong.
+              sets out all three features in full, including what they get
+              wrong.
+            </P>
+            <H3>WHOS - Financial Intelligence</H3>
+            <P>
+              When you send the assistant a question, that question is sent to
+              Google&apos;s Gemini API along with the last few messages of the
+              conversation and — if you asked about your own money — the
+              figures needed to answer it:{" "}
+              <strong>
+                totals, balances and per-category sums that WHealthOS has
+                already calculated
+              </strong>
+              . Which of them travel depends on what you asked, and a question
+              about a financial idea rather than about your money sends none of
+              them. Individual transactions, their descriptions and your
+              identity are never included; the names of your own accounts and
+              goals are, because an answer has to be able to name them back to
+              you.
+            </P>
+            <P>
+              The conversation is <strong>not stored by WHealthOS</strong>. It
+              exists in your browser tab, and closing the tab or starting a new
+              conversation ends it — so there is also no history for you to
+              return to. This only happens when you send a question.
             </P>
             <H3>What Google may do with it</H3>
             <P>

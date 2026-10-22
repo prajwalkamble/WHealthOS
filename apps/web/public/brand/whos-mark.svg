@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-labelledby="whos-mark-title">
+  <title id="whos-mark-title">WHOS</title>
+  <!-- The WHealthOS brand ramp, blue-600 to purple-600, running along the
+       mark's own rising diagonal. The same pair as the .gradient utility in
+       app/globals.css. The mark does not depend on it: see the mono variant. -->
+  <defs>
+    <linearGradient id="whos-mark-ramp" x1="5" y1="27" x2="27" y2="5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#9333ea"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#whos-mark-ramp)" d="M3.000 6.440L9.960 25.520L11.860 25.560L16.000 15.560L20.140 25.560L22.040 25.520L29.000 6.440L24.860 6.440L20.910 17.270L16.900 7.570L15.100 7.570L11.090 17.270L7.140 6.440Z"/>
+</svg>

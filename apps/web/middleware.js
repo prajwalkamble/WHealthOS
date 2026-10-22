@@ -12,6 +12,10 @@ const isProtectedRoute = createRouteMatcher([
   "/account(.*)",
   "/accounts(.*)",
   "/api/export(.*)",
+  // The WHOS chat endpoint. Listed here as well as checking the session
+  // itself: the route refuses an unauthenticated request on its own, and this
+  // means one never reaches it.
+  "/api/ai(.*)",
   "/cards(.*)",
   "/transaction(.*)",
   "/transactions(.*)",

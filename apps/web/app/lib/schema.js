@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ActionError } from "@/lib/action-error";
 import { defaultCategories } from "@/data/categories";
 import { CONTACT_TOPICS } from "@/lib/company/contact";
+import { AGENT_LIMITS } from "@/lib/ai/agent-config";
 
 // --- Form schemas -----------------------------------------------------------
 // These describe what the *browser form* holds, where number inputs are still
@@ -333,6 +334,94 @@ export const ratingInputSchema = z.coerce
   .int("Rating must be a whole number of stars")
   .min(1, "Rating must be between 1 and 5")
   .max(5, "Rating must be between 1 and 5");
+
+// --- WHOS -------------------------------------------------------------
+//
+// The chat endpoint is a public HTTP endpoint like every other, so the body is
+// validated here rather than trusted. Three things this schema is responsible
+// for, beyond shape:
+//
+//   1. Nothing identifying the caller is accepted. There is deliberately no
+//      userId, workspaceId, role or plan field: the server derives the person
+//      from the verified Clerk session, and a body that carried one of those
+//      would be an invitation to send someone else's. zod strips unknown
+//      keys, so sending one does nothing at all.
+//   2. A ceiling on what a single request can cost. The message length and
+//      the history length are both capped here, from AGENT_LIMITS, so an
+//      oversized body is refused before any token is spent on it.
+//   3. History is re-validated every turn. It round-trips through the
+//      browser, so by the time it comes back it is untrusted input that
+//      happens to look like our own output.
+
+const agentTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z
+    .string()
+    .trim()
+    .min(1)
+    // A single past turn is capped independently of the total, so one very
+    // long assistant answer cannot consume the whole history budget.
+    .max(AGENT_LIMITS.maxMessageChars * 4),
+});
+
+export const agentChatSchema = z.object({
+  message: z
+    .string({ required_error: "Type a question first" })
+    .trim()
+    .min(1, "Type a question first")
+    .max(
+      AGENT_LIMITS.maxMessageChars,
+      `Please keep it under ${AGENT_LIMITS.maxMessageChars} characters`
+    ),
+
+  // Oldest first. Trimmed to the most recent allowed turns rather than
+  // rejected, so a long conversation keeps working instead of failing once it
+  // passes the limit.
+  history: z
+    .array(agentTurnSchema)
+    .max(200)
+    .optional()
+    .default([])
+    .transform((turns) => {
+      const recent = turns.slice(-AGENT_LIMITS.maxHistoryMessages);
+
+      // Then a character budget, applied from the newest backwards, because
+      // the turn before the question matters more than the one before that.
+      const kept = [];
+      let budget = AGENT_LIMITS.maxHistoryChars;
+      for (let i = recent.length - 1; i >= 0; i--) {
+        budget -= recent[i].content.length;
+        if (budget < 0) break;
+        kept.unshift(recent[i]);
+      }
+
+      // Gemini rejects two consecutive turns with the same role, and a
+      // history that opens on an assistant turn. Both are possible after the
+      // trims above, and both are a 400 from the provider rather than
+      // anything the person did.
+      while (kept.length && kept[0].role !== "user") kept.shift();
+      const alternating = kept.filter(
+        (turn, index) => index === 0 || turn.role !== kept[index - 1].role
+      );
+
+      // The question being asked is itself a user turn and is appended after
+      // this history, so a history ending on one would put two user turns
+      // together -- which the provider rejects with a 400 that looks like our
+      // bug. A trailing user turn is a question that was never answered, so
+      // dropping it loses nothing.
+      if (alternating.at(-1)?.role === "user") alternating.pop();
+      return alternating;
+    }),
+
+  // Groups the turns of one conversation in logs and lets the client match a
+  // response to its request. Opaque to the server, never used to look
+  // anything up, and never trusted to identify a person.
+  conversationId: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/, "Invalid conversation id")
+    .optional(),
+});
 
 // Turns a ZodError into the single-line message the client toasts.
 export function parseOrThrow(schema, value) {

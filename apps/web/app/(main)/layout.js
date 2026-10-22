@@ -3,6 +3,7 @@ import Clerk from "@/components/clerk";
 import { redirect } from "next/navigation";
 import { checkUser } from "@/lib/checkUser";
 import FeedbackWidget from "@/components/feedback-widget";
+import AgentWidget from "@/components/whos-agent/agent-widget";
 import PreferencesSync from "@/components/preferences-sync";
 import AppSidebar from "@/components/app-sidebar";
 import AppHeader from "@/components/header/app-header";
@@ -63,6 +64,13 @@ const MainLayout = async ({ children }) => {
       {/* Pinned to the viewport, so it belongs to the shell rather than any
           one page. */}
       <FeedbackWidget initialRating={rating} />
+
+      {/* WHOS, on the same rail and below the feedback tab -- the space
+          that widget's own comment reserved for it. Mounted here rather than
+          per page so a question can be asked while looking at the figures it
+          is about. It holds no server data: everything it shows is fetched by
+          its own authenticated request when a question is asked. */}
+      <AgentWidget />
     </SidebarProvider>
     </Clerk>
   );

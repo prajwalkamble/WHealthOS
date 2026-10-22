@@ -1,11 +1,16 @@
 // What WHealthOS actually does with AI, established by reading the code on
-// 2026-10-11 rather than by reading the roadmap.
+// 2026-10-19 rather than by reading the roadmap.
 //
-// Two features call a model. Both were traced end to end: the request-building
+// Three features call a model. Each was traced end to end: the request-building
 // code, what the payload contains, what comes back, whether anyone looks at it
 // before it is used, and where it ends up. The page at /ai-usage renders these
 // entries instead of restating them, so the document cannot drift from the
 // implementation.
+//
+// The third, WHOS, was added on 2026-10-19 and is the most consequential
+// of the three: the first two send one image or one month of totals, and it
+// sends whichever parts of a person's financial position their question needs.
+// It is also the first to send anything the person typed themselves.
 //
 // Everything here is verifiable from the repository. The one thing that is NOT
 // -- which of Google's two sets of data terms applies to our API key -- is
@@ -13,7 +18,7 @@
 // page, because answering it requires looking at a billing account rather than
 // at code.
 
-export const AI_AUDIT_DATE = "2026-10-11";
+export const AI_AUDIT_DATE = "2026-10-19";
 
 // The route the public page lives at.
 export const AI_USAGE_LINK = "/ai-usage";
@@ -22,6 +27,10 @@ export const AI_USAGE_LINK = "/ai-usage";
 // that module would construct the Google client, and its API key, inside a
 // marketing page's render. tests/ai-usage.test.js reads the real constant out
 // of the source and fails if these two ever disagree.
+//
+// It records the DEFAULT. An operator may override the model per deployment
+// with GEMINI_MODEL, which this file cannot see and does not claim to — the
+// page names the provider only, so an override does not make it wrong.
 //
 // `model` is an audit record and is NOT published. The page names the
 // provider and stops there, because a model version is true for as long as
@@ -32,6 +41,10 @@ export const AI_PROVIDER = Object.freeze({
   name: "Google",
   service: "Gemini API",
   model: "gemini-4-argon",
+  // The assistant runs on a cheaper model than the other two, because it is
+  // the only one whose cost scales with use. Recorded for the same reason as
+  // `model` and published for the same reason as `model`: it is not.
+  agentModel: "gemini-flash-lite-latest",
   sdk: "@google/generative-ai",
   // Verified: a Gemini Developer API key (process.env.GEMINI_API_KEY) through
   // the @google/generative-ai SDK. Not Vertex AI, which is a different service
@@ -39,7 +52,7 @@ export const AI_PROVIDER = Object.freeze({
   surface: "developer-api",
 });
 
-// Both features, as the code has them. `where` is the authority for each row.
+// Every feature, as the code has them. `where` is the authority for each row.
 // `where` and `status` are provenance, not copy: they record which code each
 // entry was traced from, and a test checks the files still exist. The page
 // does not print them.
@@ -83,6 +96,26 @@ export const AI_FEATURES = Object.freeze([
     limits:
       "Commentary on a number can be wrong about what the number means. It sees one month of totals with no idea why any of them look the way they do — a deposit that was a transfer, a one-off expense, a month you were away. Treat it as a remark, not a finding.",
   }),
+  Object.freeze({
+    id: "whos-agent",
+    name: "WHOS - Financial Intelligence, the assistant",
+    where: "app/api/ai/chat/route.js — POST, through lib/ai/agent.js",
+    status: "Working. You start every request.",
+    trigger:
+      "Only when you type a question and send it, or press one of the suggested questions. Nothing is sent when you open the panel, and nothing is sent in the background.",
+    sends:
+      "Your question, the last few messages of the conversation you are in, and — only for a question about your own money — the figures needed to answer it: your income, expenses, net and savings rate for this month and last, your account names with their types and balances, your spending per category with how each one changed, six months of monthly totals, your budget limits against what you have spent, and your goal names with their targets and progress. Which of those travel depends on what you asked. A question about a financial idea rather than about your money sends no figures at all.",
+    excludes:
+      "Not your name, your email address, your account identifier, or any individual transaction — not one amount, date, description or merchant. Totals and balances only. The names that do travel are the labels you gave your own accounts and goals, which have to go for an answer to be able to name them back to you.",
+    returns:
+      "A written answer, and web links alongside it if an operator has turned live search on.",
+    review:
+      "None. The answer appears as the model wrote it. Nobody at WHealthOS reads it before it reaches you. Every figure it is given was calculated by WHealthOS rather than by the model, and the model is instructed not to do arithmetic — but nothing stops it writing a number down wrong.",
+    retention:
+      "Nothing is written to our database. The conversation exists in your browser tab and is gone when you close it or start a new one. There is no history to go back to, which also means there is no stored record of what you asked.",
+    limits:
+      "It can be wrong, and it is most convincing when it is. It works out which of your figures a question needs by matching words in what you typed, so an unusually phrased question can be answered from the wrong ones — it is told to say when it has not been given what it needs, and it will not always notice. It has no live internet access unless an operator has turned that on, so anything time-sensitive is unverified and it is instructed to say so. It cannot change anything in your account, and nothing it says is financial advice.",
+  }),
 ]);
 
 // What Google says it does with what we send. Taken from the Gemini API
@@ -118,18 +151,29 @@ export const PROVIDER_TERMS = Object.freeze({
 
 // Facts the page is allowed to assert, each one traced.
 export const AI_FACTS = Object.freeze({
-  // No AI call anywhere else. Verified: generateContent has exactly two
-  // callers in the repository.
-  featureCount: 2,
+  // No AI call anywhere else. Verified: the provider module in lib/ai has
+  // exactly three callers in the repository, counted by a test.
+  featureCount: 3,
 
-  // The model is never given database access and cannot write to it. Verified:
-  // both call sites pass a string or an image in and get text back; neither
-  // hands the model a query, a tool or a connection.
+  // The model is never given database access and cannot write to it.
+  // Verified: all three call sites pass text or an image in and get text
+  // back. None hands the model a database query, a connection, or a function
+  // it could call to read or write a record. WHOS chooses which of the
+  // caller's own figures to load in application code (lib/ai/intent.js) and
+  // loads them through the same row-level-security-scoped reads the pages
+  // use, before the model is involved at all.
+  //
+  // The one tool that can be switched on is Google's own web search, which is
+  // off by default and reaches the public web, never our database.
   modelHasNoDatabaseAccess: true,
 
   // Totals shown in the app are computed in SQL and in lib/, not by a model.
   // Verified: lib/queries.js and getMonthlyStats do the arithmetic; the model
-  // is given the result.
+  // is given the result. The same holds for the assistant: lib/ai/context.js
+  // computes every figure, change, share and average it is sent, and the
+  // prompt forbids re-deriving them. What that cannot do is stop the model
+  // mistyping one into a sentence, which is why that sits in `limits` above
+  // rather than being asserted as a guarantee here.
   figuresAreCalculatedNotGenerated: true,
 
   // Nothing the model returns is saved without a person pressing a button --
@@ -155,8 +199,21 @@ export const AI_FACTS = Object.freeze({
   monthlySummaryDefaultsOn: true,
 
   // There is still no switch for the receipt scanner, and none is needed:
-  // it runs only when someone uploads a photo.
+  // it runs only when someone uploads a photo. The same reasoning covers the
+  // assistant: it runs only when someone sends a question, and a panel nobody
+  // opens sends nothing.
   receiptScannerIsOptIn: true,
+  assistantIsOptIn: true,
+
+  // The assistant stores no conversation. Verified: there is no table, no
+  // column and no cache for it. The messages live in React state in the
+  // browser, and the server holds the request only for the length of it.
+  assistantConversationsNotStored: true,
+
+  // Live web search is off unless an operator sets WHOS_AGENT_SEARCH_GROUNDING.
+  // Verified: lib/ai/agent-config.js, where groundingTools() returns undefined
+  // when it is unset, so no tool is sent at all.
+  assistantLiveSearchOffByDefault: true,
 
   // The email prints the commentary under the heading "WHealthOS Insights"
   // with nothing marking it as machine-written. Verified in emails/template.jsx.
@@ -164,8 +221,11 @@ export const AI_FACTS = Object.freeze({
 
   // Receipt scanning is rate limited per signed-in user, and locked entirely
   // in the demo. Verified: lib/arcjet.js receiptScan, and LockedReceiptScanner
-  // in the transaction form.
+  // in the transaction form. The assistant has its own bucket in the same
+  // file, and its question, history and answer lengths are all capped in
+  // lib/ai/agent-config.js.
   scanningRateLimited: true,
+  assistantRateLimited: true,
 });
 
 // NOT claimed on the page, and why.
@@ -196,7 +256,14 @@ export const AI_FACTS = Object.freeze({
 //     an intention, in the future tense, and nothing more.
 //
 //   accuracyRate -- no measurement of how often extraction is right has been
-//     made, so no figure is given.
+//     made, so no figure is given. The same is true of the assistant: nobody
+//     has measured how often it answers correctly, so the page says it can be
+//     wrong and gives no rate.
+//
+//   agentAlwaysUsesTheRightFigures -- it picks which figures to load from the
+//     words in the question (lib/ai/intent.js). A question phrased unusually
+//     can be answered from the wrong set. That is disclosed as a limit rather
+//     than waved away.
 //
 //   dpa -- no data processing agreement with Google has been verified as
 //     executed for this project.

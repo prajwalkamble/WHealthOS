@@ -84,9 +84,9 @@ export const PROCESSORS = [
   },
   {
     name: "Google (Gemini API)",
-    purpose: "Reading a receipt photo you upload, and writing the commentary in the monthly summary email",
-    data: "The receipt image you submit; separately, your monthly totals by category. See section 7.",
-    evidence: "lib/ai/gemini.js, called from actions/transaction.js and lib/inngest/functions.js",
+    purpose: "Reading a receipt photo you upload, writing the commentary in the monthly summary email, and answering questions you put to WHOS",
+    data: "The receipt image you submit; separately, your monthly totals by category; separately, a question you typed and the already-calculated totals needed to answer it. Never an individual transaction. See section 7.",
+    evidence: "lib/ai/gemini.js, called from actions/transaction.js, lib/inngest/functions.js and lib/ai/agent.js",
   },
   {
     name: "Arcjet",

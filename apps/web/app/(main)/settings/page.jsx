@@ -71,10 +71,11 @@ export default async function SettingsPage() {
             </h3>
             <p className="text-sm text-muted-foreground">
               Imported files are read to create your transactions and are not
-              stored. Two features do send information to an external AI
-              provider: the receipt scanner sends the photo you choose, and
-              the monthly summary email sends that month&apos;s totals by
-              category. The{" "}
+              stored. Three features do send information to an external AI
+              provider: the receipt scanner sends the photo you choose, the
+              monthly summary email sends that month&apos;s totals by category,
+              and WHOS sends the question you type along with the totals
+              needed to answer it. The{" "}
               <Link
                 href={AI_USAGE_LINK}
                 className="underline underline-offset-4"

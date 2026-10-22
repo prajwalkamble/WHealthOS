@@ -9,12 +9,19 @@ import { LEGAL_LINKS } from "@/lib/legal/versions";
 
 // Guards on the AI Usage page.
 //
-// The failure mode for this document is a third AI call site. Someone adds a
-// feature that sends something to a model, the page still describes two, and
-// the page is now false about the most sensitive thing it covers. These tests
-// cannot watch Google, but they can count the callers, hold the model name to
-// the one the code actually uses, and refuse to let the page acquire the
-// reassuring sentences this audit established it cannot support.
+// The failure mode for this document is one more AI call site. Someone adds a
+// feature that sends something to a model, the page still describes the ones
+// that were there before, and the page is now false about the most sensitive
+// thing it covers. These tests cannot watch Google, but they can count the
+// callers, hold the model name to the one the code actually uses, and refuse
+// to let the page acquire the reassuring sentences this audit established it
+// cannot support.
+//
+// This is exactly what happened when WHOS was added: the count below
+// failed, which is the test doing its job, and the page, the Privacy Policy,
+// the Terms and the Settings panel all had to be corrected before it passed
+// again. The expected list is updated deliberately, never to make a failure
+// go away.
 
 const WEB = path.resolve(import.meta.dirname, "..");
 const read = (relative) => readFileSync(path.join(WEB, relative), "utf8");
@@ -74,7 +81,11 @@ describe("The AI Usage route", () => {
       /never sent to an external AI|not sent to an? (?:external )?AI|no (?:data|information) (?:is )?sent to (?:an? )?AI/i
     );
     expect(settings).toContain("AI_USAGE_LINK");
-    expect(settings).toContain("Two features do send information to an external AI");
+    expect(settings).toContain(
+      "Three features do send information to an external AI"
+    );
+    // ...and names the third, rather than counting to three and listing two.
+    expect(settings).toContain("WHOS sends the question you type");
   });
 
   it("links only to pages that exist", () => {
@@ -98,10 +109,22 @@ describe("The code is the authority for what the page says", () => {
     // lib/ai/gemini.js is not imported by the page -- importing it would
     // construct the Google client inside a marketing render -- so the two
     // copies of the model name are reconciled here instead.
+    // DEFAULT_GEMINI_MODEL, not GEMINI_MODEL: the exported constant now
+    // honours a GEMINI_MODEL environment override, and what the audit records
+    // is the default the code ships with. An operator's override is their
+    // decision and is not a published fact.
     const source = read("lib/ai/gemini.js");
-    const match = source.match(/GEMINI_MODEL = "([^"]+)"/);
+    const match = source.match(/DEFAULT_GEMINI_MODEL = "([^"]+)"/);
     expect(match).not.toBeNull();
     expect(AI_PROVIDER.model).toBe(match[1]);
+
+    // WHOS runs on a cheaper model than the other two, so there are two
+    // names to keep in step rather than one.
+    const agent = source.match(/DEFAULT_AGENT_MODEL = "([^"]+)"/);
+    expect(agent).not.toBeNull();
+    expect(AI_PROVIDER.agentModel).toBe(agent[1]);
+    expect(rendered).not.toContain(AI_PROVIDER.agentModel);
+    expect(page).not.toContain("AI_PROVIDER.agentModel");
 
     // The audit knows it. The page does not say it, and must not start.
     expect(page).not.toContain("AI_PROVIDER.model");
@@ -120,9 +143,15 @@ describe("The code is the authority for what the page says", () => {
     expect(rendered).not.toContain("<code>");
   });
 
-  it("counts every caller of the model, and there are exactly two", () => {
-    // The whole page rests on "two features and no others". A third call site
-    // makes it false, so adding one has to break this test.
+  it("counts every caller of the model, and there are exactly three", () => {
+    // The whole page rests on "these features and no others". One more call
+    // site makes it false, so adding one has to break this test.
+    //
+    // Detected by the import rather than by the name of the function called:
+    // lib/ai/gemini.js now exports two entry points (generateContent for the
+    // two original features, streamChat for the assistant), and a guard that
+    // matched one function name by sight would have missed the assistant
+    // entirely -- which is the one failure this test exists to prevent.
     const callers = [];
     const walk = (dir) => {
       for (const entry of readdirSync(dir)) {
@@ -136,7 +165,7 @@ describe("The code is the authority for what the page says", () => {
         const relative = path.relative(WEB, full);
         if (relative === "lib/ai/gemini.js") continue;
         if (relative.startsWith("tests/")) continue;
-        if (/\bgenerateContent\s*\(/.test(readFileSync(full, "utf8"))) {
+        if (/from\s+"@\/lib\/ai\/gemini"/.test(readFileSync(full, "utf8"))) {
           callers.push(relative);
         }
       }
@@ -145,6 +174,7 @@ describe("The code is the authority for what the page says", () => {
 
     expect(callers.sort()).toEqual([
       "actions/transaction.js",
+      "lib/ai/agent.js",
       "lib/inngest/functions.js",
     ]);
     expect(AI_FACTS.featureCount).toBe(callers.length);

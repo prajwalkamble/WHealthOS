@@ -19,6 +19,7 @@ import {
 } from "@/lib/time";
 import {
   categoryBreakdown,
+  change,
   monthlyFlow,
   monthWindow,
   periodTotals,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/analytics";
 import { budgetPace, budgetTotals, periodProgress } from "@/lib/budget-pace";
 import { withCurrentTenant } from "@/lib/prisma";
+import { SECTIONS } from "@/lib/ai/intent";
 
 // Prisma Decimal instances cannot cross the server/client boundary.
 //
@@ -704,5 +706,137 @@ export async function getMyRating() {
       select: { score: true },
     });
     return rating?.score ?? null;
+  });
+}
+// --- WHOS -------------------------------------------------------------
+
+// Spending per category this month and last, so a question about what changed
+// is answered from two real periods rather than one.
+//
+// Two groupBys rather than fetching rows and summing them in JS: the agent
+// only ever needs the totals, and an account with years of history should not
+// move its whole ledger into memory to answer "where is my money going".
+async function agentCategoriesFor(tx, userId) {
+  const now = monthBounds();
+  const prior = monthBoundsFor(
+    ...Object.values(previousMonth(zonedYearMonth()))
+  );
+
+  const spendIn = ({ startOfMonth, endOfMonth }) => ({
+    userId,
+    type: "EXPENSE",
+    date: { gte: startOfMonth, lte: endOfMonth },
+  });
+
+  const [nowRows, priorRows] = await Promise.all([
+    tx.transaction.groupBy({
+      by: ["category"],
+      where: spendIn(now),
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    tx.transaction.groupBy({
+      by: ["category"],
+      where: spendIn(prior),
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const before = new Map(
+    priorRows.map((row) => [row.category, row._sum.amount?.toNumber() ?? 0])
+  );
+  const total = nowRows.reduce(
+    (sum, row) => sum + (row._sum.amount?.toNumber() ?? 0),
+    0
+  );
+
+  // Every category active in either month, so one that stopped entirely is
+  // still reported instead of silently vanishing from the comparison.
+  const ids = new Set([...before.keys(), ...nowRows.map((r) => r.category)]);
+  const amountOf = new Map(
+    nowRows.map((row) => [
+      row.category,
+      { amount: row._sum.amount?.toNumber() ?? 0, count: row._count._all },
+    ])
+  );
+
+  return [...ids]
+    .map((category) => {
+      const { amount, count } = amountOf.get(category) ?? { amount: 0, count: 0 };
+      const previousAmount = before.get(category) ?? 0;
+      return {
+        category,
+        amount,
+        count,
+        previousAmount,
+        share: total > 0 ? (amount / total) * 100 : 0,
+        // null where there is no baseline -- "cannot be expressed", not 0%.
+        changePercent: change(amount, previousAmount),
+        changeAmount: amount - previousAmount,
+      };
+    })
+    .sort((a, b) => b.amount - a.amount);
+}
+
+// The caller's own financial records, for the sections a question actually
+// needs, in ONE tenant transaction.
+//
+// Every read here already existed and is already scoped by RLS through
+// withCurrentTenant; this adds no new way to reach data, it only assembles
+// what the signed-in person can already see on their own pages. `sections` is
+// filtered against SECTIONS rather than trusted, so a value arriving from
+// anywhere other than the classifier cannot widen the query.
+//
+// One transaction rather than one per section, for the reason the dashboard
+// loader gives: six interactive transactions racing for pool connections is
+// how this app produces "Unable to start a transaction in the given time".
+export async function getAgentFinancialContext(sections = []) {
+  const wanted = new Set(
+    sections.filter((section) => Object.values(SECTIONS).includes(section))
+  );
+  const want = (section) => wanted.has(section);
+
+  const { year, month } = zonedYearMonth();
+  const prior = previousMonth({ year, month });
+
+  if (wanted.size === 0) {
+    return { sections: [], period: null, generatedAt: new Date() };
+  }
+
+  return withCurrentTenant(async (tx, userId) => {
+    const [summary, accounts, categories, trends, budgets, goals] =
+      await Promise.all([
+        want(SECTIONS.TOTALS) ? summaryFor(tx, userId) : null,
+        want(SECTIONS.ACCOUNTS) ? accountsFor(tx, userId) : null,
+        want(SECTIONS.CATEGORIES) ? agentCategoriesFor(tx, userId) : null,
+        want(SECTIONS.TRENDS) ? cashFlowFor(tx, userId, 6) : null,
+        want(SECTIONS.BUDGETS) ? budgetsFor(tx, userId) : null,
+        want(SECTIONS.GOALS) ? goalsFor(tx, userId) : null,
+      ]);
+
+    // Whether this account has any history at all. Asked separately and
+    // cheaply, so "you have no transactions recorded" can be stated as a
+    // fact rather than inferred from an empty section.
+    const transactionCount = await tx.transaction.count({ where: { userId } });
+
+    return {
+      sections: [...wanted],
+      period: {
+        label: monthName(year, month),
+        year,
+        previousLabel: monthName(prior.year, prior.month),
+        timeZone: APP_TIME_ZONE,
+      },
+      transactionCount,
+      summary,
+      accounts,
+      categories,
+      trends,
+      budgets,
+      goals,
+      // When the figures were read. The assistant states this, so an answer
+      // is never mistaken for a live balance from some later moment.
+      generatedAt: new Date(),
+    };
   });
 }
