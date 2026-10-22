@@ -17,6 +17,7 @@
   "dependencies": {
     "@arcjet/next": "^1.9.1",
     "@clerk/nextjs": "^6.9.3",
+    "@google/genai": "^2.30.0",
     "@google/generative-ai": "^0.21.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-avatar": "^1.2.6",
