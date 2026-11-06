@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -169,9 +169,9 @@ const HeaderNav = ({ className }) => {
       {NAV.map(({ label, href, items }) => {
         if (!items) {
           return href ? (
-            <Link key={label} href={href} className={triggerClass}>
+            <PrefetchLink key={label} href={href} className={triggerClass}>
               {label}
-            </Link>
+            </PrefetchLink>
           ) : (
             <span key={label} className={cn(triggerClass, "cursor-default")}>
               {label}
@@ -234,7 +234,7 @@ const HeaderNav = ({ className }) => {
                 <div className="overflow-hidden rounded-2xl border border-border/60 bg-popover/95 p-2 text-popover-foreground shadow-[0_12px_32px_-16px_hsl(222_47%_11%/0.35)] backdrop-blur-md backdrop-saturate-150 animate-in fade-in-0 slide-in-from-top-1 duration-200 motion-reduce:animate-none">
                   {items.map((item) =>
                     item.href ? (
-                      <Link
+                      <PrefetchLink
                         key={item.label}
                         href={item.href}
                         onClick={(event) => {
@@ -249,7 +249,7 @@ const HeaderNav = ({ className }) => {
                         <span className="mt-0.5 block text-[13px] leading-snug text-muted-foreground">
                           {item.description}
                         </span>
-                      </Link>
+                      </PrefetchLink>
                     ) : (
                       <span
                         key={item.label}

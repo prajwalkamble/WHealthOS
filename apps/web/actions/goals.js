@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { withCurrentTenant } from "@/lib/prisma";
+import { requireFeatureInAction } from "@/lib/billing/guard";
 import {
   goalContributionSchema,
   goalInputSchema,
@@ -35,9 +36,12 @@ export async function createGoal(raw) {
 
     const input = parseOrThrow(goalInputSchema, raw);
 
-    const goal = await withCurrentTenant((tx, userId) =>
-      tx.goal.create({ data: { ...input, userId } })
-    );
+    const goal = await withCurrentTenant(async (tx, userId) => {
+      // Goals is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "goals", { tx });
+      return tx.goal.create({ data: { ...input, userId } });
+    });
 
     revalidatePath("/goals");
     return { success: true, data: { id: goal.id } };
@@ -52,6 +56,10 @@ export async function updateGoal(id, raw) {
     const input = parseOrThrow(goalInputSchema, raw);
 
     await withCurrentTenant(async (tx, userId) => {
+      // Goals is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "goals", { tx });
+
       const { count } = await tx.goal.updateMany({
         where: { id, userId },
         data: input,
@@ -74,6 +82,10 @@ export async function setGoalStatus(id, status) {
     }
 
     await withCurrentTenant(async (tx, userId) => {
+      // Goals is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "goals", { tx });
+
       const { count } = await tx.goal.updateMany({
         where: { id, userId },
         data: { status },
@@ -92,6 +104,10 @@ export async function deleteGoal(id) {
     await enforceRateLimit("write", clerkUserId);
 
     await withCurrentTenant(async (tx, userId) => {
+      // Goals is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "goals", { tx });
+
       // Contributions go with it: the schema cascades on goalId, so there is
       // no orphaned money left behind.
       const { count } = await tx.goal.deleteMany({ where: { id, userId } });
@@ -111,6 +127,10 @@ export async function addContribution(goalId, raw) {
     const input = parseOrThrow(goalContributionSchema, raw);
 
     const contribution = await withCurrentTenant(async (tx, userId) => {
+      // Goals is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "goals", { tx });
+
       await assertOwnedGoal(tx, userId, goalId);
       // userId is stored on the row as well so the RLS predicate is a column
       // check rather than a join back through the goal.
@@ -129,6 +149,10 @@ export async function deleteContribution(id) {
     await enforceRateLimit("write", clerkUserId);
 
     await withCurrentTenant(async (tx, userId) => {
+      // Goals is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "goals", { tx });
+
       const { count } = await tx.goalContribution.deleteMany({
         where: { id, userId },
       });

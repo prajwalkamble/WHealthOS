@@ -2,9 +2,16 @@ import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import AiSummaryToggle from "./_components/ai-summary-toggle";
 import AppearanceCard from "./_components/appearance-card";
+import CurrencyCard from "./_components/currency-card";
+import { FeatureNotice } from "@/components/billing/feature-gate";
+import PlanCard from "./_components/plan-card";
 import { ExportButton } from "@/components/export-drawer";
 import { ImportButton } from "@/components/import-drawer";
 import { AI_USAGE_LINK } from "@/lib/legal/ai";
+import { publicAvailability, plansAreOnSale } from "@/lib/billing/availability";
+import { billingSummary } from "@/lib/billing/service";
+import { enforcementEnabled } from "@/lib/billing/entitlements";
+import { getCurrentUserId } from "@/lib/prisma";
 import { getMonthlyInsightsEnabled, getUserAccounts } from "@/lib/queries";
 import {
   Card,
@@ -14,11 +21,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default async function SettingsPage() {
-  const [user, accounts, monthlyInsights] = await Promise.all([
+// ?plan= and ?duration= preselect a plan here, the same vocabulary /pricing
+// uses. Advisory only: they move a toggle and outline a card, nothing more.
+// Every commercially significant value is resolved server-side when checkout
+// is called, so a hand-edited query string buys nothing.
+export default async function SettingsPage({ searchParams }) {
+  const params = (await searchParams) ?? {};
+  // The same answer the pricing page gets, from the same place, so the two
+  // surfaces cannot disagree about whether this deployment sells anything.
+  const availability = publicAvailability();
+
+  const [user, accounts, monthlyInsights, billing] = await Promise.all([
     currentUser(),
     getUserAccounts(),
     getMonthlyInsightsEnabled(),
+    getCurrentUserId().then((id) => billingSummary(id)),
   ]);
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
   const name =
@@ -35,7 +52,39 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <AppearanceCard />
+      {/* Above appearance on purpose: this changes what the figures SAY,
+          which matters more than what they look like -- and unlike the
+          appearance settings it is free on every plan, because reading your
+          own money in your own currency is not something to charge for. */}
+      <CurrencyCard />
+
+      {/* Said, not enforced here: the card mixes nine paid settings with the
+          light/dark switch, which every plan includes, so hiding it would
+          take a free feature away with them. savePreferences refuses the paid
+          ones on the server; this is what tells somebody why beforehand. */}
+      <div className="space-y-2">
+        <FeatureNotice feature="appearance.customize">
+          Colour, type and density are saved to your account on a paid plan.
+        </FeatureNotice>
+        <AppearanceCard />
+      </div>
+
+      {/* Hidden rather than disabled when this deployment has no Razorpay
+          credentials. A card whose only button reports "payments are not
+          available" is worse than no card: it reads as an outage to the
+          person looking at it, when in fact nothing is wrong with their
+          account. Both the secret and the published key id are required --
+          see lib/payments/config.js for why the second one matters. */}
+      {billing && (
+        <PlanCard
+          summary={billing}
+          enforced={enforcementEnabled()}
+          onSale={plansAreOnSale()}
+          availability={availability}
+          initialPlanId={typeof params.plan === "string" ? params.plan : null}
+          initialInterval={typeof params.duration === "string" ? params.duration : null}
+        />
+      )}
 
       {/* The findable home for both directions. The buttons on Transactions
           are shortcuts to these same drawers; someone looking for "where do I

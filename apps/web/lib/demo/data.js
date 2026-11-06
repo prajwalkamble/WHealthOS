@@ -6,7 +6,7 @@
 // to today on the app's calendar, so the dashboard always has a current month
 // to show whenever the demo is opened.
 
-import { monthBoundsFor, zonedYearMonth } from "@/lib/time";
+import { monthBoundsFor, zonedYearMonth, zonedDayOfMonth } from "@/lib/time";
 
 // openingBalance, not balance: the shown balance is the opening figure plus
 // everything posted against the account, so a transaction the guest adds moves
@@ -22,6 +22,15 @@ const openedAt = () => {
   at.setUTCMonth(at.getUTCMonth() - OPENED_MONTHS_AGO);
   return at.toISOString();
 };
+
+// The currency the sample figures are written in.
+//
+// Stated rather than assumed, because the guest dashboard shows them in
+// whichever currency the visitor is reading in -- and the only honest way to
+// do that is to convert them from a known starting currency at a real rate.
+// Relabelling ₹84,250 as ¥84,250 would be a lie about roughly a factor of
+// two, and it is the specific thing §12 of the multi-currency brief forbids.
+export const DEMO_CURRENCY = "INR";
 
 export const DEMO_ACCOUNTS = [
   {
@@ -86,7 +95,22 @@ function buildTransactions() {
       const amount = Math.round(base * drift(back * 13 + index * 7));
       // Clamp to a day the month actually has, and never post in the future:
       // a transaction dated later this month would make "this month" wrong.
-      const safeDay = Math.min(day, daysInMonth);
+      //
+      // Dropping the future ones outright emptied the current month early in
+      // it. The templates put the earliest expense on day 2, so on the 1st
+      // every expense was in the future and the demo dashboard showed a
+      // salary, no spending, no category breakdown and no donut -- for the
+      // whole of the first day of every month, on the page the public "Try
+      // it (Sample Data!)" button leads to.
+      //
+      // So the current month is compressed into the part of it that has
+      // happened rather than truncated: a template day maps proportionally
+      // into the elapsed days, which keeps every category present and keeps
+      // their order. Earlier months are untouched, and nothing is ever dated
+      // ahead of now.
+      const elapsed = back === 0 ? Math.min(zonedDayOfMonth(), daysInMonth) : daysInMonth;
+      const spread = Math.max(1, Math.ceil((Math.min(day, daysInMonth) / daysInMonth) * elapsed));
+      const safeDay = Math.min(spread, daysInMonth);
       const date = new Date(startOfMonth);
       date.setUTCDate(date.getUTCDate() + safeDay - 1);
       if (date > new Date()) return;

@@ -9,6 +9,7 @@ import {
   Text
 } from "@react-email/components";
 import * as React from "react";
+import BrandHeader from "./_components/brand-header";
 
 // Emails render from job data, so every numeric field is formatted through one
 // helper that tolerates a missing or non-numeric value instead of throwing
@@ -30,6 +31,7 @@ export default function EmailTemplate({
         <Preview>Your Monthly Financial Report</Preview>
         <Body style={styles.body}>
           <Container style={styles.container}>
+            <BrandHeader align="center" />
             <Heading style={styles.title}>Monthly Financial Report</Heading>
 
             <Text style={styles.text}>Hello {userName},</Text>
@@ -111,6 +113,7 @@ export default function EmailTemplate({
         <Preview>Budget Alert</Preview>
         <Body style={styles.body}>
           <Container style={styles.container}>
+            <BrandHeader align="center" />
             <Heading style={styles.title}>Budget Alert</Heading>
             <Text style={styles.text}>Hello {userName},</Text>
             <Text style={styles.text}>

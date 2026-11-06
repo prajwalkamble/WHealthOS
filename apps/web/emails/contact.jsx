@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
+import BrandHeader from "./_components/brand-header";
 
 // An enquiry from the public form on /contact.
 //
@@ -35,6 +36,7 @@ export default function ContactEmail({
       </Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
+          <BrandHeader />
           <Heading style={styles.title}>{subject || topic}</Heading>
           {subject && <Text style={styles.topic}>{topic}</Text>}
 

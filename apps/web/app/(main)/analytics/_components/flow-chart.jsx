@@ -9,8 +9,8 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import { monthName } from "@/lib/time";
+import { useCurrency } from "@/components/currency-provider";
 
 // Same tokens as the dashboard's chart, so the two pages agree visually. What
 // differs is the job: this one spans the whole selected range with a labelled
@@ -23,6 +23,10 @@ const CONFIG = {
 };
 
 const FlowChart = ({ flow }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency, formatCompact: formatCompactCurrency } = useCurrency();
+
   const data = flow.map((row) => ({
     ...row,
     label: monthName(row.year, row.month).slice(0, 3),

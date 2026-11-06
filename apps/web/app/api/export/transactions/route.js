@@ -6,6 +6,9 @@ import { transactionsWorkbook } from "@/lib/export/xlsx";
 import { transactionStatement } from "@/lib/export/pdf";
 import { requireClerkUserId } from "@/lib/session";
 import { enforceRateLimit } from "@/lib/arcjet";
+import { getCurrentUserId } from "@/lib/prisma";
+import { requireFeature } from "@/lib/billing/guard";
+import { EntitlementError } from "@/lib/billing/entitlements";
 import { APP_TIME_ZONE } from "@/lib/time";
 
 // Server-side generation: the rows are queried, rendered and streamed back as
@@ -74,6 +77,25 @@ export async function GET(request) {
     await enforceRateLimit("write", clerkUserId);
   } catch {
     return Response.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  // Taking your data out is a paid feature, so the plan is checked before any
+  // of it is read -- not after the rows have been assembled and only the file
+  // withheld. The plan comes from the subscription row, never the request.
+  try {
+    await requireFeature(await getCurrentUserId(), "data.export");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return Response.json(
+        {
+          error: "Exporting your transactions is part of the Pro plan.",
+          code: "FORBIDDEN",
+        },
+        { status: 403 }
+      );
+    }
+    console.error({ code: "EXPORT_ENTITLEMENT_CHECK_FAILED", error });
+    return Response.json({ error: "Could not check your plan" }, { status: 503 });
   }
 
   const params = new URL(request.url).searchParams;

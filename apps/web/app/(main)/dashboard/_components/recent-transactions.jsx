@@ -1,4 +1,10 @@
-import Link from "next/link";
+"use client";
+
+// A client component, which it effectively already was: the guest demo
+// and the landing page both render it inside their own client trees.
+// Saying so explicitly is what lets it read the display currency from
+// context instead of being handed one by three different callers.
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,8 +12,8 @@ import {
   WidgetHeader,
 } from "@/components/dashboard/widget";
 import { categoryColors, defaultCategories } from "@/data/categories";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
   defaultCategories.map((category) => [category.id, category.name])
@@ -23,6 +29,12 @@ const RecentTransactions = ({
   limit = 7,
   viewAllHref = "/transactions",
 }) => {
+  // Bound to the display currency the viewer chose. This component is shared
+  // by the signed-in dashboard, the guest demo and the landing page, and it
+  // formats correctly in all three without any of them telling it which
+  // currency to use.
+  const { format: formatCurrency } = useCurrency();
+
   const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
   const rows = transactions.slice(0, limit);
 
@@ -32,7 +44,7 @@ const RecentTransactions = ({
         title="Transactions"
         action={
           <Button variant="outline" size="sm" asChild>
-            <Link href={viewAllHref}>View All</Link>
+            <PrefetchLink href={viewAllHref}>View All</PrefetchLink>
           </Button>
         }
       />

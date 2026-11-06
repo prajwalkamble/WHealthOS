@@ -1,6 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
 import UserAvatar from "./user-avatar";
-import Image from "next/image";
 import Link from "next/link";
 import { Button } from "./ui/button";
 import { LayoutDashboard } from "lucide-react";
@@ -9,6 +8,7 @@ import HeaderMobileNav from "./header-mobile-nav";
 import HeaderNav, { NAV } from "./header-nav";
 import HeaderShell from "./header-shell";
 import { cn } from "@/lib/utils";
+import Logo from "@/components/brand/logo";
 
 // The reference's button: 50px tall, a full pill, 16px at weight 500, and
 // 32px of padding either side. Shared by both states so the outline and the
@@ -64,25 +64,13 @@ const Header = async () => {
     <HeaderShell>
       <nav className="flex w-full items-center gap-4 lg:gap-8">
         <Link href="/" className="shrink-0">
-          {/* Two files rather than a CSS filter: the wordmark is near-black
-              navy, which disappears against the dark background, and no filter
-              lifts it without flattening the gradient on the bar chart.
-              logo-dark.png is the same mark with lightness remapped and hue
-              untouched. Only one carries the accessible name. */}
-          <Image
-            src="/logo.png"
-            alt="WHealthOS"
-            height={60}
-            width={150}
-            className="h-[22px] w-auto cursor-pointer object-contain dark:hidden lg:h-[26px]"
-          />
-          <Image
-            src="/logo-dark.png"
-            alt=""
-            aria-hidden
-            height={60}
-            width={150}
-            className="hidden h-[22px] w-auto cursor-pointer object-contain dark:block lg:h-[26px]"
+          {/* One element for both themes. The mark and "OS" read their
+              stops from --brand-ramp-*, and "Health" from --brand-ink, all of
+              which the dark theme redefines -- so the pair of PNGs and the
+              dark:hidden swap they needed are both gone. */}
+          <Logo
+            id="header"
+            className="h-[22px] w-auto cursor-pointer lg:h-[26px]"
           />
         </Link>
 

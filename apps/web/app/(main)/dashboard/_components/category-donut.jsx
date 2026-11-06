@@ -10,7 +10,7 @@ import {
   WidgetHeader,
 } from "@/components/dashboard/widget";
 import { defaultCategories } from "@/data/categories";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
   defaultCategories.map((category) => [category.id, category.name])
@@ -21,6 +21,10 @@ const LABELS = Object.fromEntries(
 const LEGEND_TILES = 4;
 
 const CategoryDonut = ({ title, rows, emptyLabel }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const { slices, tiles, total, config } = useMemo(() => {
     const total = rows.reduce((sum, row) => sum + row.amount, 0);
     const slices = rows.map((row, index) => ({

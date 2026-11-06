@@ -34,11 +34,13 @@ export const CONTACT_EMAIL = "hello@whealthos.com";
 // same inbox: the category tells the reader what the message is about, it does
 // not route it somewhere that does not exist.
 //
-// No billing or subscription category. data/pricing.js advertises paid plans,
-// but none of them can be bought -- there is no payment processor anywhere in
-// the codebase and no subscription model in the schema -- so a billing queue
-// would be a queue for a problem nobody can have yet. When billing exists, add
-// it here and the form, the page and the tests pick it up together.
+// No billing or subscription category -- and this is now a gap rather than a
+// deliberate omission. It was written when nothing could be bought; billing
+// exists today (lib/billing, lib/payments, the Razorpay webhook), and the
+// subscription confirmation email published hello@whealthos.com as the
+// address to write to about billing. Adding a topic here changes the enquiry
+// form and its tests, so it is left for a deliberate change rather than done
+// as a side effect of the email work.
 export const CONTACT_TOPICS = [
   {
     id: "support",

@@ -5,6 +5,10 @@ import { checkUser } from "@/lib/checkUser";
 import FeedbackWidget from "@/components/feedback-widget";
 import AgentWidget from "@/components/whos-agent/agent-widget";
 import PreferencesSync from "@/components/preferences-sync";
+import { CurrencyProvider } from "@/components/currency-provider";
+import { currentCurrency } from "@/lib/currency/server";
+import { presentationData } from "@/lib/currency/presentation";
+import ConversionNotice from "@/components/conversion-notice";
 import AppSidebar from "@/components/app-sidebar";
 import AppHeader from "@/components/header/app-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -40,10 +44,34 @@ const MainLayout = async ({ children }) => {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
+  // Resolved here, on the server, so the first paint is already in the right
+  // currency. Doing it in the browser would render every figure in the
+  // default and then swap it a frame later -- a hydration mismatch, and an
+  // unpleasant one to watch on a page of balances.
+  //
+  // This layout is already dynamic (it reads cookies and the account), so
+  // this costs nothing. The root layout is deliberately left alone: a
+  // cookies() call there would opt the marketing pages out of static
+  // generation for a currency none of them displays.
+  const currency = await currentCurrency();
+
+  // The INPUTS to the presentation decision, not the decision itself.
+  //
+  // What the ledger is held in, and the current rate table. Both are plain,
+  // small and serialisable, and they go to the browser once per page load --
+  // after which switching currency is local arithmetic over data it already
+  // has, with no server involved.
+  //
+  // Handing over the decision instead (a scalar computed here) was what made
+  // every currency change a round trip, because the client had no way to
+  // compute a different one.
+  const { ledger, rates } = await presentationData(user.id);
+
   return (
     // Always wrapped: everything under (main) is signed in, and the shell is
     // full of Clerk components -- the avatar menu, the profile screen.
     <Clerk>
+    <CurrencyProvider initial={currency} ledger={ledger} rates={rates}>
     <SidebarProvider defaultOpen={defaultOpen}>
       {/* Applies the theme saved on the account, for a browser that has not
           seen this user before. */}
@@ -57,6 +85,11 @@ const MainLayout = async ({ children }) => {
 
         {/* app-content: the Content Layout setting centres this column. */}
         <div className="app-content flex flex-1 flex-col gap-6 p-4 md:p-6">
+          {/* Where the figures below came from, when they are not simply what
+              is stored. A converted balance is an estimate at somebody else's
+              published rate, and a finance dashboard that does not say so is
+              making a claim it cannot support. */}
+          <ConversionNotice />
           {children}
         </div>
       </SidebarInset>
@@ -72,6 +105,7 @@ const MainLayout = async ({ children }) => {
           its own authenticated request when a question is asked. */}
       <AgentWidget />
     </SidebarProvider>
+    </CurrencyProvider>
     </Clerk>
   );
 };

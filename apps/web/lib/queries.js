@@ -32,6 +32,7 @@ import {
 import { defaultCategories } from "@/data/categories";
 import { budgetPace, budgetTotals, periodProgress } from "@/lib/budget-pace";
 import { withCurrentTenant } from "@/lib/prisma";
+import { requireFeatureInAction } from "@/lib/billing/guard";
 import { SECTIONS } from "@/lib/ai/intent";
 
 // Prisma Decimal instances cannot cross the server/client boundary.
@@ -576,6 +577,11 @@ export async function getAnalytics({
   const cashflowWindow = dayWindowBounds(CASHFLOW_RANGES[cashflowKey].days);
 
   return withCurrentTenant(async (tx, userId) => {
+    // Analytics is a paid feature. Checked inside the tenant transaction,
+    // before any row is read, and resolved from the subscription rather than
+    // from anything the caller passed in.
+    await requireFeatureInAction(userId, "analytics", { tx });
+
     const window = monthWindow(span);
     const { startOfMonth, endOfMonth } = windowBounds(window);
 

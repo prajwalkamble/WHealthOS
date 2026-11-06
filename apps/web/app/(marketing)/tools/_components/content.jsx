@@ -245,7 +245,7 @@ export const CONTENT = {
         <P>
           The split between what you paid in and what it grew by is shown
           explicitly, year by year. If an inflation figure is given, the final
-          value is also discounted back into today's money.
+          value is also discounted back into today&rsquo;s money.
         </P>
       </>
     ),
@@ -358,8 +358,8 @@ export const CONTENT = {
         <P>
           Renting counts rent paid, rising each year, against a portfolio built
           from the deposit and buying costs you did not spend plus any month
-          where the owner's outgoings exceed the rent. Buying counts interest,
-          upkeep and purchase costs, against the equity you hold — the property's
+          where the owner&rsquo;s outgoings exceed the rent. Buying counts interest,
+          upkeep and purchase costs, against the equity you hold — the property&rsquo;s
           projected value less the loan still outstanding.
         </P>
       </>

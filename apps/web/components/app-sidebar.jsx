@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -16,6 +15,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { usePreferences } from "@/components/preferences-provider";
+import Logo from "@/components/brand/logo";
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +33,18 @@ import {
 // button with a "Coming Soon" tooltip instead of a link. Keeping them out of
 // the router entirely is deliberate -- a live link to a page that does not
 // exist lands the user on the 404 screen.
+//
+// intent: what hovering the item is allowed to fetch. Everything defaults to
+// a full prefetch -- the whole page, data included -- because these are the
+// eight destinations somebody moves between all day, and each one is a single
+// tenant-scoped read.
+//
+// Analytics is the exception. getAnalytics() runs requireFeatureInAction
+// behind a paid-feature gate and reads up to twenty-four months, so a hover
+// would do the most expensive work in the application, and for an account
+// without the feature it would do it only to throw. It gets the shell: the
+// skeleton in analytics/loading.js arrives on hover, the figures when asked
+// for.
 const NAV_ITEMS = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
@@ -40,7 +52,7 @@ const NAV_ITEMS = [
   { title: "Cards", url: "/cards", icon: CreditCard },
   { title: "Budgets", url: "/budgets", icon: PiggyBank },
   { title: "Goals", url: "/goals", icon: Target },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "Analytics", url: "/analytics", icon: BarChart3, intent: "shell" },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -134,15 +146,32 @@ const AppSidebar = ({ items = NAV_ITEMS, homeHref = "/dashboard" }) => {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href={homeHref}>
-                <Image
-                  src="/logo.png"
-                  alt="WHealthOS"
-                  width={120}
-                  height={48}
-                  className="h-8 w-auto object-contain group-data-[collapsible=icon]:h-6"
+              <PrefetchLink href={homeHref}>
+                {/* Was the light PNG only, which left a near-black navy
+                    wordmark on the dark rail. currentColor fixes that, and
+                    the collapsed rail drops to the standalone W rather than
+                    squeezing the whole lockup into an icon slot.
+
+                    The sizes are important-flagged, which is not decoration.
+                    SidebarMenuButton carries `[&>svg]:size-4` for the menu
+                    icons, and with `asChild` that lands on this anchor -- so
+                    it matches the logo too. `.x > svg` outranks a class on the
+                    svg itself, so the lockup was being forced into a 16px box:
+                    at the lockup's aspect that renders about three pixels
+                    tall, which is why it looked missing rather than wrong. The old
+                    <Image> was an <img> and never matched. sidebar.jsx itself
+                    uses `!` for this same reason a few lines up. */}
+                <Logo
+                  id="sidebar"
+                  className="!h-8 !w-auto group-data-[collapsible=icon]:hidden"
                 />
-              </Link>
+                <Logo
+                  variant="mark"
+                  id="sidebar-mark"
+                  decorative
+                  className="hidden !h-6 !w-6 group-data-[collapsible=icon]:block"
+                />
+              </PrefetchLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -163,10 +192,10 @@ const AppSidebar = ({ items = NAV_ITEMS, homeHref = "/dashboard" }) => {
                       isActive={isActive(pathname, item.url)}
                       tooltip={item.title}
                     >
-                      <Link href={item.url}>
+                      <PrefetchLink href={item.url} intent={item.intent}>
                         <item.icon />
                         <span>{item.title}</span>
-                      </Link>
+                      </PrefetchLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )

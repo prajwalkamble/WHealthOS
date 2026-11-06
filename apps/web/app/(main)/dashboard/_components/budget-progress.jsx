@@ -1,15 +1,15 @@
 "use client";
 
 import { updateBudget } from '@/actions/budget';
-import Link from 'next/link';
+import PrefetchLink from '@/components/navigation/prefetch-link';
 import { Button } from '@/components/ui/button';
 import { Widget, WidgetContent, WidgetHeader } from '@/components/dashboard/widget';
 import { Input } from '@/components/ui/input';
 import useFetch from '@/hooks/use-fetch';
-import { formatCurrency } from '@/lib/format';
 import { Check, Pencil, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { useCurrency } from "@/components/currency-provider";
 
 const BudgetProgress = ({
   initialBudget,
@@ -17,6 +17,10 @@ const BudgetProgress = ({
   hasAccount = true,
   guest = false,
 }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const [isEditing, setIsEditing] = useState(false);
   const [newbudget, setNewBudget] = useState(
     initialBudget?.amount?.toString() || ""
@@ -106,7 +110,7 @@ const BudgetProgress = ({
         }
         action={
           <Button variant="outline" size="sm" className="h-8" asChild>
-            <Link href="/transactions">View Report</Link>
+            <PrefetchLink href="/transactions">View Report</PrefetchLink>
           </Button>
         }
       />

@@ -25,6 +25,10 @@
 //      in an audit, so the signed-in cookie set is taken from source and from
 //      Clerk's documentation rather than from observation.
 
+// The date of the browser sweep the "observed" rows come from. Deliberately
+// not moved when something is added from the source afterwards: it answers
+// "when was this watched in a browser", and a payment checkout added on
+// 2026-10-23 was not. The row for it in THIRD_PARTY_HOSTS says as much.
 export const COOKIE_AUDIT_DATE = "2026-10-11";
 
 // type: "cookie" | "localStorage" | "sessionStorage"
@@ -172,7 +176,11 @@ export const STORAGE_INVENTORY = [
 export const NOT_PRESENT = [
   "Analytics of any kind, first-party or third-party",
   "Advertising or marketing tags, and tracking pixels",
-  "Embedded third-party content such as social widgets, maps or video players",
+  // Qualified on 2026-10-23. The payment checkout is embedded third-party
+  // content, and the sentence would be false without saying so. It is also
+  // the only one, it loads from nothing but your own click, and the sweep
+  // below never saw it -- all three of which belong in the same breath.
+  "Embedded third-party content such as social widgets, maps or video players — with one exception: the payment provider's checkout, which is loaded only when you click a Pay button and not before",
   "Service workers, Cache Storage and IndexedDB",
   "Any cookie or browser storage set by our hosting or security providers",
   "Webfonts fetched from a third party — the fonts are served from our own domain",
@@ -184,6 +192,11 @@ export const NOT_PRESENT = [
 export const THIRD_PARTY_HOSTS = [
   { host: "Clerk (its own domain)", why: "Checks whether you have a session. This happens on every page, including ones with nothing to sign in to, because the check runs on every route -- but signed out it is the only thing that reaches Clerk: the sign-in software itself is no longer loaded on the public pages." },
   { host: "img.clerk.com", why: "Serves images used by the sign-in interface, such as the Google logo. Only on the pages that show that interface." },
+  // Added 2026-10-23, from the source rather than from the sweep -- which is
+  // stated in the row itself rather than left for someone to assume, because
+  // every other row here was watched in a browser. Nothing about Razorpay was
+  // reachable on the audit date and nothing about it is reachable signed out.
+  { host: "checkout.razorpay.com", why: "The payment checkout, which opens in its own window over the page. Contacted only after you click a Pay button in Settings, never on a public page and never signed out. Razorpay sets its own cookies on its own domain once it opens; we cannot read them and cannot delete them, and they were not enumerated in the sweep below because the checkout did not exist on that date." },
 ];
 
 // The route this page lives at. Beside the inventory rather than in

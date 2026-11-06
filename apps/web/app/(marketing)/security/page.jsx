@@ -178,10 +178,13 @@ export default function SecurityPage() {
                 must respect the content type we declare rather than guessing
                 at it, it passes only our origin and not the full address when
                 you follow a link off-site, and it is denied the microphone,
-                location, payment and USB interfaces outright. These reduce the
-                damage a flaw could do. They do not prevent one, and they are
-                not a content security policy &mdash; WHealthOS does not have
-                one of those yet.
+                location and USB interfaces outright. The browser payment
+                interface is the one exception: it is denied to every origin
+                except our own and our payment provider&rsquo;s checkout, which
+                needs it for the UPI and wallet options inside its own window.
+                These reduce the damage a flaw could do. They do not prevent
+                one, and they are not a content security policy &mdash;
+                WHealthOS does not have one of those yet.
               </P>
             )}
             <P>
@@ -232,9 +235,12 @@ export default function SecurityPage() {
               </Item>
               <Item>
                 <strong>Bank credentials.</strong> WHealthOS does not connect
-                to your bank, does not ask for net-banking or UPI
-                credentials, and cannot initiate a payment. Balances are the
-                ones you type in.
+                to your bank and never asks you for net-banking, UPI or card
+                details: it cannot read your accounts and cannot move money out
+                of them. If you buy a plan, those details are typed into the
+                payment provider&rsquo;s own window and go straight to them
+                &mdash; we are told only that a payment succeeded. Balances
+                here are the ones you type in.
               </Item>
               <Item>
                 <strong>Receipt images.</strong> A photo you submit to the

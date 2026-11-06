@@ -1,0 +1,82 @@
+# Re-register the background jobs with Inngest after every production deploy.
+#
+# Inngest does not poll. It holds a registration -- an app URL and the list of
+# functions served there -- and fires crons against that. A deploy changes the
+# code; it does not change the registration. So a deploy that adds a cron,
+# renames a function, or repairs a broken endpoint does nothing at all until
+# something syncs.
+#
+# This is the gap that cost three weeks. On 2026-10-15 a middleware change had
+# Arcjet refuse every request to /api/inngest; Inngest dropped the app and the
+# crons stopped at 14:45 that afternoon. A later deploy fixed the endpoint --
+# and the crons stayed dead until 2026-11-05, because nothing re-registered
+# the app. The uptime heartbeat, budget alerts, monthly reports and recurring
+# transactions were all silently not running, while the endpoint answered
+# correctly and the dashboard showed an app.
+#
+# The Vercel-Inngest marketplace integration does this too, and does it better
+# -- it also keeps the signing key in step. It has to be installed by hand
+# through Vercel's OAuth consent flow, which cannot be scripted. This workflow
+# is the version that needs no consent flow and no third-party access to the
+# Vercel account. Running both is harmless: syncing twice changes nothing.
+name: Sync Inngest
+
+on:
+  # Vercel reports each deployment to GitHub through its app, which is what
+  # makes this fire without any Vercel credentials here.
+  deployment_status:
+  # ...and by hand, which is what you want the day something is wrong.
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Origin to sync (defaults to the SITE_URL variable)"
+        required: false
+
+jobs:
+  sync:
+    # Only a deployment that actually succeeded, and only production. A
+    # preview deployment must never be registered: it would point the crons
+    # at a URL that stops existing, which is this same outage with extra
+    # steps.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment == 'Production')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register the app with Inngest
+        env:
+          # The canonical origin, not the deployment URL. A per-deployment
+          # hostname works today and is gone next week; the registration has
+          # to outlive the deployment that created it.
+          ORIGIN: ${{ github.event.inputs.url || vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ORIGIN}" ]; then
+            echo "::error::No origin. Set the repository variable SITE_URL (e.g. https://www.whealthos.com)."
+            exit 1
+          fi
+
+          endpoint="${ORIGIN%/}/api/inngest"
+          echo "Syncing ${endpoint}"
+
+          # Probed first, because a 403 here has a specific cause worth
+          # naming: something in front of the route is refusing it, and the
+          # middleware matcher is what has done that before.
+          probe=$(curl -s -o /dev/null -w "%{http_code}" "${endpoint}")
+          if [ "${probe}" = "403" ]; then
+            echo "::error::${endpoint} answered 403 before reaching the handler. Check that apps/web/middleware.js still excludes api/inngest in BOTH matcher patterns."
+            exit 1
+          fi
+          echo "Endpoint reachable (GET ${probe}; 401 is the healthy answer to an unsigned request)."
+
+          body=$(mktemp)
+          code=$(curl -s -X PUT -o "${body}" -w "%{http_code}" "${endpoint}")
+          cat "${body}"; echo
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::Sync failed with HTTP ${code}."
+            exit 1
+          fi
+          echo "Synced. Crons schedule from the registration, so the next run is within one cron interval."

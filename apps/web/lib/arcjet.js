@@ -42,6 +42,21 @@ const limiters = {
       capacity: AGENT_LIMITS.burst,
     })
   ),
+  // Opening a subscription, verifying a checkout, and cancelling.
+  //
+  // Low on purpose. A person upgrading their plan does this once, perhaps
+  // twice if the first attempt fails or they change their mind between
+  // monthly and yearly. Anything beyond that is a script, and every
+  // subscription opened is a record on the merchant account that somebody has
+  // to reconcile by hand. Verification shares the bucket because the two
+  // always come in pairs, and separating them would let a loop of verify
+  // calls -- which is what guessing at a signature looks like -- run free.
+  //
+  // Reading the current plan uses the `write` bucket instead: the billing
+  // page polls it after a checkout, and it costs nothing on the provider.
+  payment: aj.withRule(
+    tokenBucket({ mode: "LIVE", refillRate: 10, interval: 3600, capacity: 5 })
+  ),
   // Edits, deletes, default-account, budget and rating changes.
   write: aj.withRule(
     tokenBucket({ mode: "LIVE", refillRate: 120, interval: 3600, capacity: 60 })

@@ -23,7 +23,7 @@
 // never off a category name.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import { Layer, Rectangle, Sankey } from "recharts";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,8 @@ import {
   UNCATEGORIZED,
   cashflowDiagram,
 } from "@/lib/analytics";
-import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/components/currency-provider";
+import { formatCompactCurrency as defaultCompact } from "@/lib/currency/format";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_NAME = new Map(defaultCategories.map((c) => [c.id, c.name]));
@@ -173,7 +174,15 @@ export function focusState(focus, id) {
 // Every ribbon and every node in this diagram is a share of the same pooled
 // total -- in equals out by construction -- so one denominator covers the
 // whole chart, and it is named outright rather than left to be guessed at.
-export function cashflowDetail(diagram, active) {
+// `formatCompact` is passed in rather than imported, because this is a pure
+// function shared by the chart and its tests, and the currency it should
+// format in is a property of who is looking -- not of this module.
+//
+// The default is the application default currency, for callers with no viewer
+// to ask: the tests, and anything server-side. Every call from the chart
+// passes the viewer's own formatter, so the default is never what somebody
+// actually reads.
+export function cashflowDetail(diagram, active, formatCompact = defaultCompact) {
   if (!active) return null;
 
   const pooled = diagram.nodes.find((node) => node.side === "pool")?.amount ?? 0;
@@ -183,7 +192,7 @@ export function cashflowDetail(diagram, active) {
     // A ₹200 category against ₹1.4L rounds to zero, and "0% of ₹1.4L pooled"
     // reads as nothing at all rather than as something small.
     const shown = percent < 1 ? "under 1%" : `${Math.round(percent)}%`;
-    return `${shown} of ${formatCompactCurrency(pooled)} pooled`;
+    return `${shown} of ${formatCompact(pooled)} pooled`;
   };
 
   if (active.type === "link") {
@@ -237,6 +246,9 @@ export function cashflowDetail(diagram, active) {
 // category is small, and the small ones are exactly where the collisions
 // start.
 export const SankeyNode = ({ x, y, width, height, payload, focus }) => {
+  // Its own hook call: Recharts constructs this element itself, so there is
+  // no parent render here to pass a formatter down from.
+  const { formatCompact: formatCompactCurrency } = useCurrency();
   const { side, name, amount, color } = payload;
   const state = focusState(focus, payload.id);
   const middle = y + height / 2;
@@ -419,6 +431,10 @@ export function placeTooltip({ x, y, width }) {
 }
 
 const CashflowSankey = ({ cashflow, range, onRangeChange, busy = false }) => {
+  // Bound to the display currency the viewer chose, so this chart, its
+  // tooltips and its spoken summary all format in it.
+  const { format: formatCurrency, formatCompact: formatCompactCurrency } = useCurrency();
+
   const { sources, destinations, income, expenses, net, surplus, drawnFromBalances, excluded } =
     cashflow;
 
@@ -441,7 +457,10 @@ const CashflowSankey = ({ cashflow, range, onRangeChange, busy = false }) => {
     return related ? { id: active.id, ...related } : null;
   }, [active, adjacency]);
 
-  const detail = useMemo(() => cashflowDetail(diagram, active), [diagram, active]);
+  const detail = useMemo(
+    () => cashflowDetail(diagram, active, formatCompactCurrency),
+    [diagram, active, formatCompactCurrency]
+  );
 
   const clear = useCallback(() => setActive(null), []);
 
@@ -646,10 +665,10 @@ const CashflowSankey = ({ cashflow, range, onRangeChange, busy = false }) => {
             or record a transaction and it will appear here.
           </p>
           <Button asChild size="sm" variant="outline" className="mt-4">
-            <Link href="/transaction/create">
+            <PrefetchLink href="/transaction/create">
               <Plus aria-hidden className="mr-1.5 h-4 w-4" />
               Add transaction
-            </Link>
+            </PrefetchLink>
           </Button>
         </div>
       ) : (

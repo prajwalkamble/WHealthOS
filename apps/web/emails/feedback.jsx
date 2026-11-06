@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
+import BrandHeader from "./_components/brand-header";
 
 // Feedback sent from the widget in the app. Plain on purpose: this one is read
 // by the maintainer, not by a user, so what matters is who wrote it, what kind
@@ -28,6 +29,7 @@ export default function FeedbackEmail({
       </Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
+          <BrandHeader />
           <Heading style={styles.title}>{label}</Heading>
 
           <Section>

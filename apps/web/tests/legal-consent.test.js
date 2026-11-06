@@ -161,7 +161,26 @@ describe("The sign-up page", () => {
   });
 
   it("sends a completed signup to the consent step", () => {
-    expect(read(SIGN_UP_PAGE)).toContain('forceRedirectUrl="/welcome"');
+    const source = read(SIGN_UP_PAGE);
+
+    // forceRedirectUrl, never fallbackRedirectUrl: a ?redirect_url on the way
+    // in must not be able to route around consent.
+    // The prop as used, not the word as written: the file's own comment
+    // explains why it is not the fallback variant, and that comment is not a
+    // use of it.
+    expect(source).toMatch(/forceRedirectUrl\s*=/);
+    expect(source).not.toMatch(/fallbackRedirectUrl\s*=/);
+
+    // The destination may now carry a ?next (a plan chosen on /pricing before
+    // there was an account to attach it to), so the assertion is that every
+    // branch still lands on /welcome rather than that the string is fixed.
+    const destinations = [...source.matchAll(/["'`](\/welcome[^"'`]*)["'`]/g)].map((m) => m[1]);
+    expect(destinations.length).toBeGreaterThan(0);
+    for (const destination of destinations) {
+      expect(destination.startsWith("/welcome")).toBe(true);
+    }
+    // And nothing offers a way past it.
+    expect(source).not.toMatch(/forceRedirectUrl=\{?["'`]?\/dashboard/);
   });
 
   it("shows both documents before anyone signs up", () => {
@@ -190,8 +209,22 @@ describe("The consent route", () => {
   it("refuses to render for an anonymous visitor on its own account", () => {
     const source = read("app/(auth)/welcome/page.jsx");
     expect(source).toContain("redirect(\"/sign-in\")");
-    // Already provisioned: nothing to accept, and never a second record.
-    expect(source).toContain("redirect(\"/dashboard\")");
+
+    // Already provisioned: nothing to accept, and never a second record. The
+    // destination is now a validated ?next whose fallback is the dashboard,
+    // so this checks that the redirect still happens and still defaults
+    // there, rather than pinning the literal it used to be.
+    expect(source).toMatch(/if \(user\) redirect\(/);
+    expect(source).toContain('safeRedirect');
+    expect(source).toContain('"/dashboard"');
+  });
+
+  it("will not let the post-consent destination leave the site", () => {
+    // Without validation the consent step becomes an open redirect, and one
+    // that fires immediately after somebody has typed their password.
+    const source = read("app/(auth)/welcome/page.jsx");
+    expect(source).toContain("safeRedirect(");
+    expect(source).not.toMatch(/searchParams[^;]*\.next\s*\|\|/);
   });
 
   it("is where the app sends a session with no account", () => {

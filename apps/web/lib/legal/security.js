@@ -97,8 +97,16 @@ export const SECURITY = {
   // Added 2026-10-11 in next.config.mjs headers(), and checked against a
   // production build rather than the dev server: nosniff, X-Frame-Options
   // DENY, Referrer-Policy strict-origin-when-cross-origin, a Permissions-
-  // Policy denying microphone, geolocation, payment and usb, and HSTS for two
-  // years in production only. Not a CSP -- see notClaimed.contentSecurityPolicy.
+  // Policy denying microphone, geolocation and usb, and HSTS for two years in
+  // production only. Not a CSP -- see notClaimed.contentSecurityPolicy.
+  //
+  // Amended 2026-10-23: `payment` is no longer denied outright. Razorpay
+  // Standard Checkout runs in a frame it injects, and the Payment Request API
+  // behind its UPI and wallet options is gated on this header -- with
+  // payment=() those methods vanish from the modal with nothing to explain
+  // why. It is now delegated to self and Razorpay's own checkout origin,
+  // which is a narrower grant than the wildcard most sites use and a wider
+  // one than before. The page says so rather than keeping the old sentence.
   responseHeaders: true,
 
   // lib/action-error.js: only an ActionError's message reaches the browser.

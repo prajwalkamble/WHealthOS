@@ -8,6 +8,7 @@ import ThemeCustomizer from "@/components/theme-customizer";
 import UserAvatar from "@/components/user-avatar";
 import GlobalSearch from "./global-search";
 import NotificationBell from "./notification-bell";
+import CurrencySelector from "@/components/currency-selector";
 
 // The signed-in app's top bar: the rail toggle, a search that spans
 // transactions and accounts, then notifications, appearance and the account
@@ -28,6 +29,15 @@ const AppHeader = () => {
       <GlobalSearch className="w-full max-w-md" />
 
       <div className="ml-auto flex items-center gap-1">
+        {/* Before the bell, because it changes what every figure on the page
+            says while the other controls change how it looks. Hidden on the
+            narrowest screens, where the same control lives in Settings.
+
+            It can live here now that the figures actually convert: picking a
+            currency changes the amounts, not just the symbol. When no rate is
+            available the amounts stay in the currency they are held in and
+            ConversionNotice says why, so the control never silently lies. */}
+        <CurrencySelector className="hidden sm:inline-flex" />
         <NotificationBell />
         {/* Everything under (main) is signed in. */}
         <ThemeToggle persist />

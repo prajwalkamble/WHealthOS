@@ -1,5 +1,6 @@
 import { Webhook } from "svix";
 import { webhookSecret } from "@/lib/email/config";
+import { isDeliveryEvent, recordDeliveryEvent } from "@/lib/email/delivery";
 import {
   INBOUND_EVENT,
   parseInboundEvent,
@@ -68,6 +69,25 @@ export async function POST(request) {
     // Verified as genuinely from Resend, but not JSON. Retrying cannot help.
     console.warn("Resend webhook: verified body was not JSON.");
     return Response.json({ ignored: true }, { status: 200 });
+  }
+
+  // Delivery outcomes, before the inbound parser gets a look at them. These
+  // are the only evidence that a subscription confirmation actually reached
+  // somebody -- an id back from the send API is not -- and they are about a
+  // message WHealthOS sent, so they share nothing with an inbound email
+  // beyond arriving at the same endpoint.
+  if (isDeliveryEvent(event?.type)) {
+    try {
+      const outcome = await recordDeliveryEvent(event);
+      return Response.json({ ok: true, ...outcome }, { status: 200 });
+    } catch (error) {
+      // 500 so Resend retries: the event was genuine and this end failed.
+      console.error("Resend webhook: delivery event not recorded", {
+        errorType: error?.name ?? "exception",
+        message: error?.message,
+      });
+      return Response.json({ error: "Processing failed" }, { status: 500 });
+    }
   }
 
   const parsed = parseInboundEvent(event);

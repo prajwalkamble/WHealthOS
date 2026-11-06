@@ -3,6 +3,7 @@ import { AI_USAGE_LINK } from "@/lib/legal/ai";
 import { COOKIE_POLICY_LINK } from "@/lib/legal/cookies";
 import { DATA_TABLE, POLICY, PROCESSORS } from "@/lib/legal/policy";
 import { SECURITY_LINK } from "@/lib/legal/security";
+import { TERMS } from "@/lib/legal/terms";
 import {
   Callout, DataTable, Fact, H3, Item, List, P, Section, TableOfContents,
 } from "@/components/legal/prose";
@@ -138,9 +139,16 @@ export default function PrivacyPage() {
             <H3>Things we do not collect</H3>
             <List>
               <Item>
-                <strong>No payment information.</strong> WHealthOS has no
-                payment processor connected. We do not take card details and
-                hold no billing records.
+                {/* Amended 2026-10-23. This used to say WHealthOS had no
+                    payment processor connected, which stopped being true the
+                    day one was. The claim worth keeping is the narrower and
+                    more useful one: we never see the card. */}
+                <strong>Payment card details.</strong> If you buy a plan, your
+                card, UPI or bank details are typed into{" "}
+                <Fact value={TERMS.paymentProcessor} />&rsquo;s own checkout
+                window and go directly to them. WHealthOS never receives them,
+                never stores them, and holds no billing records &mdash; we are
+                told only that a payment succeeded, and by whom.
               </Item>
               <Item>
                 <strong>No analytics or advertising.</strong> There is no

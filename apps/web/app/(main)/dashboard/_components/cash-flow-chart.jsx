@@ -13,7 +13,7 @@ import {
   WidgetFooter,
   WidgetHeader,
 } from "@/components/dashboard/widget";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/components/currency-provider";
 import { cn } from "@/lib/utils";
 import { TrendingDown, TrendingUp } from "lucide-react";
 
@@ -31,15 +31,19 @@ const VIEWS = [
   { value: "flow", label: "Flow" },
 ];
 
-const tooltip = (
+// A function of the formatter rather than a module constant.
+//
+// It used to be a single shared element built once at module load, which
+// meant the formatter it closed over was fixed at module load too -- and a
+// tooltip that always said rupees no matter which currency the dashboard was
+// being read in. Both charts still get the same element; it is now built per
+// render from the currency in force.
+const tooltipFor = (format) => (
   <ChartTooltip
     cursor={{ fill: "hsl(var(--muted))", opacity: 0.6 }}
     content={
       <ChartTooltipContent
-        formatter={(value, name) => [
-          formatCurrency(value),
-          CHART_CONFIG[name]?.label ?? name,
-        ]}
+        formatter={(value, name) => [format(value), CHART_CONFIG[name]?.label ?? name]}
       />
     }
   />
@@ -69,6 +73,11 @@ const Legend = () => (
 );
 
 const CashFlowChart = ({ months }) => {
+  // Bound to the display currency the viewer chose, so this chart and its
+  // tooltips format in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+  const tooltip = tooltipFor(formatCurrency);
+
   const [view, setView] = useState("bars");
 
   const { totals, trend } = useMemo(() => {

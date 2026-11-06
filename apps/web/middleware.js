@@ -16,6 +16,18 @@ const isProtectedRoute = createRouteMatcher([
   // itself: the route refuses an unauthenticated request on its own, and this
   // means one never reaches it.
   "/api/ai(.*)",
+  // Billing: checkout, verification, plan state and cancellation. Each one
+  // refuses an anonymous request on its own; listed here as well so one never
+  // reaches them.
+  //
+  // The Razorpay WEBHOOK is deliberately not here and must not be: it is
+  // /api/webhooks/razorpay, which has no session to protect, verifies its own
+  // signature, and is excluded from this middleware entirely by the matcher
+  // below -- Arcjet's detectBot runs LIVE in production and does not allow
+  // Razorpay, so a matched webhook path has every delivery blocked.
+  "/api/billing(.*)",
+  // The billing confirmation page.
+  "/billing(.*)",
   "/cards(.*)",
   "/transaction(.*)",
   "/transactions(.*)",
@@ -56,14 +68,25 @@ export default createMiddleware(aj, clerk);
 
 export const config = {
   matcher: [
-    // Skip Next.js internals and all static files, unless found in search params
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes -- except the Resend webhook. detectBot runs
-    // LIVE in production and does not allow Resend, so leaving it matched
-    // would have Arcjet block every webhook delivery. That endpoint has no
-    // session to protect and verifies each request's Svix signature itself,
-    // which is a stronger gate than bot detection.
-    '/api/((?!webhooks/).*)',
+    // Skip Next.js internals and all static files, unless found in search
+    // params -- and skip the machine endpoints, for the reason below.
+    //
+    // The exclusions have to be repeated in BOTH patterns. Next runs the
+    // middleware when ANY matcher matches, so listing "not webhooks" only in
+    // the second one achieved nothing: this pattern matched
+    // /api/webhooks/razorpay anyway and Arcjet refused every delivery with a
+    // 403. That was invisible in development, where detectBot runs in
+    // DRY_RUN, and in production it silently killed every inbound
+    // integration -- Razorpay's subscription events, Clerk's user sync, and
+    // Inngest, whose crons stopped dead the day this shipped.
+    '/((?!_next|api/webhooks/|api/inngest|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes -- except the webhooks and Inngest. detectBot
+    // runs LIVE in production and allows neither, so a matched path has every
+    // delivery blocked. None of them has a session to protect and each
+    // authenticates itself more strongly than bot detection could: the
+    // webhooks verify a signature over the raw body, and Inngest verifies
+    // INNGEST_SIGNING_KEY.
+    '/api/((?!webhooks/|inngest).*)',
     '/trpc(.*)',
   ],
 };

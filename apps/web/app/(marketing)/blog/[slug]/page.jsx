@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { COMPANY_LINKS } from "@/lib/company/links";
 import { formatPostDate, publishedPost, publishedPosts } from "@/lib/blog/posts";
 import { articleFor } from "../_posts/registry";
+import { OG_IMAGE } from "@/lib/brand/identity.mjs";
 
 // One article.
 //
@@ -34,6 +35,12 @@ export async function generateMetadata({ params }) {
       title: post.title,
       description: post.description,
       publishedTime: post.date,
+      // There is no per-article image, so a shared post falls back to the
+      // product's own card rather than to nothing. Restated here because a
+      // page's `openGraph` replaces the root layout's instead of merging.
+      images: [
+        { url: `/${OG_IMAGE.path}`, width: OG_IMAGE.width, height: OG_IMAGE.height, alt: "WHealthOS" },
+      ],
     },
   };
 }

@@ -1,9 +1,28 @@
 "use client";
 
+// DORMANT. Nothing renders this today.
+//
+// It is the three-column plan comparison that /pricing used to be. The plans
+// are discontinued -- see plansAreOnSale() in lib/billing/availability.js --
+// so /pricing is now the free page and this component is not mounted
+// anywhere. It is kept, rather than deleted, because that switch is meant to
+// be reversible: turning selling back on should be a configuration change
+// plus a rewrite of the pricing copy, not a rebuild of the comparison table,
+// the period toggle and the feature matrix.
+//
+// It is still exercised: priceFor is the canonical price calculation and
+// tests/pricing.test.js, tests/billing-plans.test.js and four others assert
+// against this file. If the plans are never coming back, delete this and
+// move priceFor to lib/billing/plans.js -- but delete the tests with it
+// rather than leaving them guarding a surface nobody can reach.
+
 import { useState } from "react";
 import Link from "next/link";
-import * as icons from "lucide-react";
-import { Check, Info, Minus } from "lucide-react";
+import PrefetchLink from "@/components/navigation/prefetch-link";
+import { checkoutUrl, isDuration } from "@/lib/billing/checkout-url";
+import { canSell } from "@/lib/billing/availability";
+import { Check, Circle, Info, Minus } from "lucide-react";
+import { PRICING_ICONS } from "./pricing-icons";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -22,8 +41,16 @@ import { cn } from "@/lib/utils";
 
 // Icons are named in data/pricing.js so the content stays free of imports;
 // anything unrecognised falls back rather than crashing the page.
+//
+// Resolved against an explicit map rather than the library's namespace. It
+// used to be `import * as icons from "lucide-react"`, which reads nicely and
+// costs the entire icon set: Next's optimizePackageImports rewrites NAMED
+// imports and cannot touch a namespace one, because the whole object has to
+// exist at runtime. That single line made this route's JavaScript 172 kB
+// against 200 B for every comparable marketing page, and in development it
+// put roughly fifteen hundred modules into the graph on every compile.
 const Icon = ({ name, className }) => {
-  const Component = icons[name] ?? icons.Circle;
+  const Component = PRICING_ICONS[name] ?? Circle;
   return <Component className={className} />;
 };
 
@@ -139,8 +166,31 @@ const ROWS = [
   ]),
 ];
 
-const PricingPlans = ({ defaultPeriod = "monthly" }) => {
-  const [period, setPeriod] = useState(defaultPeriod);
+const PricingPlans = ({
+  defaultPeriod = "monthly",
+  signedIn = false,
+  initialDuration = null,
+  // What this deployment can actually sell, resolved on the server. Absent
+  // means "assume it works", which is only the case in a render with no page
+  // behind it -- a test, or a story.
+  availability = null,
+}) => {
+  // The period in the address bar wins, so a shared link opens on the thing
+  // it is a link to. Validated rather than used as given.
+  const [period, setPeriod] = useState(
+    isDuration(initialDuration) ? initialDuration : defaultPeriod
+  );
+
+  // Choosing a plan is a link to /billing, and that is the whole of it.
+  //
+  // This page used to open the Razorpay modal itself, which put a payment
+  // window on a marketing page: a visitor went from comparing plans to being
+  // charged with nothing in between -- no price confirmed, no renewal terms,
+  // no cancellation policy, nothing to read before the card field appeared.
+  // The review page at /billing is that missing step, it prices the plan on
+  // the server, and it is behind the middleware, so a signed-out visitor is
+  // sent through sign-in and returned to the same URL afterwards. One link
+  // covers both, which is why there is no signed-in branch here.
 
   // The popular column is drawn as an outline running the height of the table.
   // Borders go on its own cells, so the rule follows the rows however tall
@@ -241,6 +291,19 @@ const PricingPlans = ({ defaultPeriod = "monthly" }) => {
         </span>
       </div>
 
+      {/* Why the buttons are disabled, said once.
+          
+          Only ever set outside production, where the person reading it is the
+          person who can fix it -- in production it is null and the buttons
+          simply read as unavailable. Above the table rather than under each
+          column, because it is one fact about the deployment and not three
+          facts about three plans. */}
+      {availability?.developmentHint && (
+        <p className="mx-auto mt-6 max-w-3xl rounded-md border bg-muted/50 p-3 text-center text-xs leading-5 text-muted-foreground">
+          {availability.developmentHint}
+        </p>
+      )}
+
       {/* pt-5 leaves room inside the scroll box for the badge to sit on the
           table's top edge; without it the container would clip it. The table
           scrolls sideways rather than reflowing -- a comparison whose columns
@@ -324,12 +387,65 @@ const PricingPlans = ({ defaultPeriod = "monthly" }) => {
                       );
                     })()}
 
-                    <Button
-                      asChild
-                      className={cn("mt-4 w-full font-semibold", accent.button)}
-                    >
-                      <Link href={plan.cta.href}>{plan.cta.label}</Link>
-                    </Button>
+                    {/* Free, signed in: nothing.
+                        
+                        Somebody already signed in IS on the Free plan -- it
+                        is what every account has until it pays -- so a button
+                        offering to create a free account is an invitation to
+                        do something they have already done. The cell is left
+                        empty rather than filled with a disabled button or a
+                        "current plan" badge, because the column above it
+                        already says Free and the comparison table below is
+                        what they came to read. */}
+                    {plan.monthly === 0 ? (
+                      signedIn ? null : (
+                        <Button
+                          asChild
+                          className={cn("mt-4 w-full font-semibold", accent.button)}
+                        >
+                          <Link href={plan.cta.href}>{plan.cta.label}</Link>
+                        </Button>
+                      )
+                    ) : (
+                      (() => {
+                        // A button that cannot work should not look like one
+                        // that can. The server already knows whether this
+                        // deployment has Razorpay credentials and a Razorpay
+                        // Plan for this tier; offering a live-looking button
+                        // anyway produced a dead click and a toast that
+                        // explained nothing.
+                        const sellable =
+                          availability === null || canSell(availability, plan.id, period);
+
+                        if (!sellable) {
+                          return (
+                            <span className="mt-4 block">
+                              <Button
+                                type="button"
+                                disabled
+                                className={cn("w-full font-semibold", accent.button)}
+                              >
+                                Not available yet
+                              </Button>
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <Button
+                            asChild
+                            className={cn("mt-4 w-full font-semibold", accent.button)}
+                          >
+                            <PrefetchLink
+                              href={checkoutUrl(plan.id, period)}
+                              intent="none"
+                            >
+                              {plan.cta.label}
+                            </PrefetchLink>
+                          </Button>
+                        );
+                      })()
+                    )}
                   </th>
                 );
               })}

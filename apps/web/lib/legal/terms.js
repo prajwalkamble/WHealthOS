@@ -16,17 +16,85 @@ export const TERMS = {
   // --- Commercial position, verified -------------------------------------
   //
   // data/pricing.js advertises Free (₹0), Pro (₹399/mo) and Intelligent
-  // (₹699/mo). None of them can be bought: all three CTAs link to /sign-up,
-  // there is no payment processor anywhere in the codebase, no subscription or
-  // plan model in the Prisma schema, and no plan gating in application code.
-  // The advertised per-day transaction limits are not enforced either -- the
-  // only limit is Arcjet's, which is the same for everyone.
+  // (₹699/mo). The three marketing CTAs still link to /sign-up.
   //
-  // So the Terms describe one free service and no billing. Writing renewal,
-  // refund or cancellation clauses would be describing a product that does not
-  // exist.
-  paidPlansAvailable: false,
-  paymentProcessor: null,
+  // Changed 2026-10-23. A Razorpay Standard Checkout was integrated
+  // (lib/payments/, app/api/payments/razorpay/, and a Plan card in Settings),
+  // so the previous statement -- "there is no payment processor anywhere in
+  // the codebase" -- is no longer true and the Terms could not go on saying
+  // it.
+  //
+  // What did NOT change, and this is the part the document has to be careful
+  // about: the advertised per-day transaction limits and feature tiers are
+  // still not applied to anybody -- the only limit is Arcjet's, which is the
+  // same for everyone. So a payment can be taken and it buys no feature.
+  //
+  // What DID change again, on 2026-10-25: it now buys a subscription. A
+  // checkout creates a Razorpay subscription, a row in `subscriptions`, and a
+  // recurring charge that renews until it is cancelled. The earlier wording --
+  // "creates no subscription" -- became false the moment that landed, so
+  // section 6 was rewritten to describe renewal, cancellation and the absence
+  // of proration, which are now real terms about a real agreement.
+  //
+  // Both corrections sit inside the SAME unpublished version string. 2026-10-23
+  // was bumped in the working tree and has never been deployed or accepted by
+  // anybody, so there is no consent record naming the text being replaced. The
+  // moment it ships, a further change needs a further bump.
+  //
+  // That in-between state is worse to be vague about than either end of it,
+  // so it is recorded as its own fact rather than folded into the first one.
+  // paidPlansAvailable stays false because it answers "can someone obtain a
+  // paid plan", and they cannot.
+  //
+  // The checkout is also invisible unless the deployment sets Razorpay
+  // credentials (app/(main)/settings/page.jsx), and the card carries a notice
+  // saying plans are not switched over. Renewal, proration and cancellation
+  // clauses are still absent, because there is still no subscription to
+  // renew, prorate or cancel.
+  //
+  // Updated 2026-10-23 (later the same day). Entitlements now exist: there is
+  // a plan on every subscription, a check on every paid route, and a tier
+  // ladder derived from the pricing table. Whether those checks REFUSE
+  // anything is a single environment variable, BILLING_ENFORCEMENT, and it is
+  // off -- so the statement below is still true of the running product.
+  //
+  // The day it is switched on, section 6 of the Terms becomes false and must
+  // be rewritten with a version bump. That is not left to memory:
+  // tests/legal-consistency.test.js fails the build if enforcement is on
+  // while checkoutIntegratedButSellsNothing is still true.
+  // Changed 2026-11-01, with a version bump. BILLING_ENFORCEMENT is on:
+  // requireEntitlement() now refuses, so a plan is the difference between
+  // having Budgets, Goals, Analytics, export and the AI features and not
+  // having them. Both flags below therefore flip, and section 6 was rewritten
+  // in the same change -- it previously promised, in terms, that this would
+  // not happen without new terms published first.
+  //
+  // Answers "can somebody obtain a paid plan", meaning the capability set the
+  // pricing page attaches to one. They can, and it is enforced.
+  paidPlansAvailable: true,
+  paymentProcessor: "Razorpay",
+  // Answers "does paying buy an entitlement". It does now. The name is read
+  // literally by tests/legal-consistency.test.js, which fails the build if
+  // this is true while BILLING_ENFORCEMENT is on -- and, since 2026-11-01,
+  // also if it is false while enforcement is OFF, because the rewritten
+  // section 6 describes plans that actually gate something.
+  checkoutIntegratedButSellsNothing: false,
+  // NOT enforced, and the Terms must not imply otherwise. data/pricing.js
+  // advertises a per-day transaction cap per plan ("5 per day", "15 per day")
+  // and nothing in the application applies it: USER_TRANSACTION_LIMIT in
+  // actions/transaction.js is a flat 500-row query bound, identical for every
+  // account. Feature tiers are enforced; this number is not. Section 6
+  // describes the first and is silent on the second.
+  perDayTransactionLimitEnforced: false,
+  // ...but it does buy a subscription, and that distinction is the whole of
+  // what section 6 has to get right. Verified: lib/billing/service.js opens a
+  // Razorpay subscription, `subscriptions` records it, and
+  // requestCancellation() stops it at the end of the paid period.
+  subscriptionsAreReal: true,
+  // Verified: lib/payments/razorpay.js changes a plan only with
+  // schedule_change_at "cycle_end", and nothing anywhere computes a part
+  // period. The Terms therefore promise no proration rather than implying it.
+  prorationCalculated: false,
 
   // --- Acceptance, verified ----------------------------------------------
   //

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import { Menu, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
@@ -65,13 +65,13 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
             {nav.map(({ label, href, items }) => (
               <div key={label} className="py-1.5">
                 {href ? (
-                  <Link
+                  <PrefetchLink
                     href={href}
                     className={linkClass}
                     onClick={() => setOpen(false)}
                   >
                     {label}
-                  </Link>
+                  </PrefetchLink>
                 ) : (
                   <span
                     className={cn(
@@ -89,14 +89,14 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
                   <div className="mt-1.5 flex flex-col gap-1 border-l pl-3">
                     {items.map((item) =>
                       item.href ? (
-                        <Link
+                        <PrefetchLink
                           key={item.label}
                           href={item.href}
                           className={cn(linkClass, "py-1")}
                           onClick={() => setOpen(false)}
                         >
                           {item.label}
-                        </Link>
+                        </PrefetchLink>
                       ) : (
                         <span
                           key={item.label}
@@ -113,9 +113,9 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
 
             {showDemoLink && (
               <Button variant="outline" asChild className="mt-2 sm:hidden">
-                <Link href="/demo" onClick={() => setOpen(false)}>
+                <PrefetchLink href="/demo" onClick={() => setOpen(false)}>
                   Explore WHealthOS
-                </Link>
+                </PrefetchLink>
               </Button>
             )}
           </div>

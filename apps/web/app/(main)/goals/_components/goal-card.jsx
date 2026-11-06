@@ -12,10 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCurrency } from "@/lib/format";
 import { APP_TIME_ZONE } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { paceOf } from "./pace";
+import { useCurrency } from "@/components/currency-provider";
 
 const dateLabel = (iso) =>
   new Intl.DateTimeFormat("en-IN", {
@@ -26,6 +26,10 @@ const dateLabel = (iso) =>
   }).format(new Date(iso));
 
 const GoalCard = ({ goal, onEdit, onContribute, onComplete, onArchive, onDelete }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const pace = paceOf(goal);
   const closed = goal.status !== "ACTIVE";
 

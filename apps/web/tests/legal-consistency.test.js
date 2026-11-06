@@ -5,6 +5,7 @@ import { LEGAL_LINKS } from "@/lib/legal/versions";
 import { SECURITY_LINK } from "@/lib/legal/security";
 import { COOKIE_POLICY_LINK } from "@/lib/legal/cookies";
 import { AI_USAGE_LINK } from "@/lib/legal/ai";
+import { TERMS } from "@/lib/legal/terms";
 
 // Guards across the five public documents, rather than inside any one of them.
 //
@@ -181,6 +182,148 @@ describe("The documents do not contradict each other", () => {
       for (const other of ["OpenAI", "Anthropic", "Mistral", "Cohere"]) {
         expect(text, `${name} names ${other}`).not.toContain(other);
       }
+    }
+  });
+
+  it("tells the same story about payment as the code does", () => {
+    // Added 2026-10-23, the day a payment processor first appeared in this
+    // codebase. Until then every document said there was none, and all five
+    // of those sentences were true. One integration made four of them false
+    // at once -- the Terms, the Privacy processor list, the Security page's
+    // Permissions-Policy paragraph and the About page's "no billing" line --
+    // and nothing was looking, which is the failure this file exists for.
+    const integrated = existsSync(path.join(WEB, "lib/payments/razorpay.js"));
+    expect(
+      integrated,
+      "the payment integration moved -- re-check this guard against it"
+    ).toBe(true);
+
+    // The record has to name the provider, and the documents have to agree
+    // with the record rather than with each other.
+    expect(TERMS.paymentProcessor).toBeTruthy();
+    // The Terms name the provider through the record -- <Fact value={...} />
+    // -- rather than typing it out, so the rendered text here holds the
+    // expression and not the word. Asserting on the expression is the
+    // stronger check anyway: it is what stops the page and the record
+    // drifting apart when the provider changes.
+    expect(read(PAGES.terms)).toContain("TERMS.paymentProcessor");
+    expect(read("lib/legal/policy.js")).toContain(TERMS.paymentProcessor);
+
+    // No document may still deny it.
+    for (const [name, text] of Object.entries(rendered)) {
+      expect(text, `${name} still denies a payment processor`).not.toMatch(
+        /no payment processor|cannot currently take payment|there is no checkout/i
+      );
+    }
+  });
+
+  it("describes the plans it actually enforces", () => {
+    // The mirror of the guard this replaced. Until 2026-11-01 the danger was
+    // a checkout that took money for an entitlement nobody built, and section
+    // 6 had to warn about it. Enforcement is on now, so the danger has
+    // inverted: the document must describe plans that genuinely gate
+    // features, and must not go on promising that nothing is withheld.
+    expect(TERMS.checkoutIntegratedButSellsNothing).toBe(false);
+    expect(TERMS.paidPlansAvailable).toBe(true);
+    expect(TERMS.subscriptionsAreReal).toBe(true);
+
+    // The old promises must be gone, not merely contradicted elsewhere.
+    expect(rendered.terms).not.toMatch(/does not do is unlock anything/i);
+    expect(rendered.terms).not.toMatch(/no paid feature is held back/i);
+
+    // A recurring charge still has to state that it recurs and how to stop
+    // it -- that requirement never depended on enforcement.
+    expect(rendered.terms, "section 6 must say the subscription recurs").toMatch(
+      /renews automatically/i
+    );
+    expect(rendered.terms, "section 6 must say how to stop it").toMatch(/cancel/i);
+    expect(rendered.terms, "proration is not calculated and must be stated").toMatch(
+      /proration/i
+    );
+
+    // And it must still promise a refund where a payment buys nothing, which
+    // is now the narrower case of a payment that fails to deliver.
+    expect(rendered.terms).toMatch(/refund it in full/i);
+
+    // The notice period for taking a feature away from the free plan. The
+    // previous version promised exactly this before any limit was applied,
+    // so dropping it would be removing a commitment users accepted.
+    expect(
+      rendered.terms,
+      "section 6 must promise notice before a free feature is moved behind a plan"
+    ).toMatch(/tell you before we do it/i);
+  });
+
+  it("does not claim a limit the application never applies", () => {
+    // data/pricing.js advertises a per-day transaction cap per plan.
+    // USER_TRANSACTION_LIMIT in actions/transaction.js is a flat 500-row
+    // query bound, identical for every account, and nothing else enforces a
+    // daily figure. The Terms are the document people are bound by, so the
+    // one place this must not appear is here.
+    expect(TERMS.perDayTransactionLimitEnforced).toBe(false);
+    expect(rendered.terms).not.toMatch(/per day|a day\b|daily limit/i);
+  });
+
+  it("forces the Terms to be rewritten before the daily cap is applied", () => {
+    // A tripwire, the same shape as the one below for BILLING_ENFORCEMENT.
+    //
+    // lib/billing/quota.js implements the advertised per-day cap and ships
+    // switched off, because applying it would make two statements false at
+    // once: the Terms say nothing about a daily limit, and section 6 promises
+    // notice before a free feature is moved behind a plan. Turning the switch
+    // on is therefore a decision about documents and notice, not a
+    // deployment toggle -- and this fails the build if it is made alone.
+    if (process.env.BILLING_QUOTA_ENFORCEMENT !== undefined) {
+      expect(
+        process.env.BILLING_QUOTA_ENFORCEMENT.toLowerCase(),
+        "BILLING_QUOTA_ENFORCEMENT is on while the Terms still record the " +
+          "cap as unenforced and say nothing about a daily limit. Rewrite " +
+          "section 6, bump TERMS in lib/legal/versions.js, give notice, then " +
+          "set perDayTransactionLimitEnforced: true."
+      ).not.toBe("on");
+    }
+  });
+
+  it("forces the Terms to be rewritten before plans are enforced", () => {
+    // A tripwire, not a behaviour test.
+    //
+    // Section 6 tells people that paying unlocks nothing. That is true while
+    // BILLING_ENFORCEMENT is off, and becomes a false statement in a document
+    // people have accepted the moment it is switched on. Nothing else would
+    // catch that: the switch is an environment variable, and legal text does
+    // not have a deploy step.
+    //
+    // So: if enforcement is on, checkoutIntegratedButSellsNothing must be
+    // false, section 6 must have been rewritten, and LEGAL_VERSIONS.TERMS
+    // bumped with it.
+    if (TERMS.checkoutIntegratedButSellsNothing) {
+      expect(
+        process.env.BILLING_ENFORCEMENT?.toLowerCase(),
+        "enforcement is on, so the Terms no longer describe the product -- " +
+          "rewrite section 6, set checkoutIntegratedButSellsNothing to false, " +
+          "and bump LEGAL_VERSIONS.TERMS"
+      ).not.toBe("on");
+    }
+
+    // And the other way round, added 2026-11-01. Section 6 now tells people
+    // that budgets, goals, analytics, export and the AI features belong to a
+    // paid plan. Switching enforcement back off would hand all of that to
+    // everyone and make the document wrong in the opposite direction -- a
+    // less harmful error, but still a document that does not describe the
+    // product.
+    //
+    // Only when the variable is set to something. A test run cannot know how
+    // production is configured, and the fixtures here own no subscription --
+    // demanding enforcement globally would fail every suite that exercises a
+    // gated feature. Unset means "this environment has not been configured
+    // either way", which is the normal state for a developer and for CI.
+    if (TERMS.paidPlansAvailable && process.env.BILLING_ENFORCEMENT !== undefined) {
+      expect(
+        process.env.BILLING_ENFORCEMENT.toLowerCase(),
+        "the Terms describe enforced plans while BILLING_ENFORCEMENT is " +
+          "explicitly off -- either turn it on, or rewrite section 6 and " +
+          "bump the version"
+      ).toBe("on");
     }
   });
 

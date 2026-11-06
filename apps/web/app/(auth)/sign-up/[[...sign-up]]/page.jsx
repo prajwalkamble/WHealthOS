@@ -1,16 +1,26 @@
 import { SignUp } from '@clerk/nextjs';
 import Link from 'next/link';
 import { LEGAL_LINKS } from '@/lib/legal/versions';
+import { safeRedirect } from '@/lib/safe-redirect';
 
-export default function Page () {
+export default async function Page ({ searchParams }) {
+  // Clerk's own redirect_url, carried through the consent step rather than
+  // obeyed instead of it. Someone who picked a plan on /pricing and had no
+  // account yet comes back to that plan once they have one.
+  const next = safeRedirect((await (searchParams ?? {}))?.redirect_url, null);
+  const afterSignUp = next ? `/welcome?next=${encodeURIComponent(next)}` : "/welcome";
+
   return (
     <div className="flex w-full max-w-md flex-col items-center gap-6 px-4 pb-16">
       {/* forceRedirectUrl, not fallbackRedirectUrl: the consent step is not a
           suggestion to be overridden by a ?redirect_url on the way in. The
           (main) layout refuses to render without an account either, so a
           signup that lands anywhere else still arrives there -- this just
-          means the usual path is the direct one. */}
-      <SignUp forceRedirectUrl="/welcome" />
+          means the usual path is the direct one.
+          
+          A requested destination is not dropped, it is deferred: it rides on
+          /welcome and is used once consent has actually been given. */}
+      <SignUp forceRedirectUrl={afterSignUp} />
 
       {/* Both documents, reachable before anyone commits to anything. The
           acceptance itself is the next step, once Clerk has verified who this

@@ -48,9 +48,19 @@ const nextConfig = {
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       // Features this app does not use. camera stays allowed for ourselves:
       // the receipt input offers "take a photo" on a phone.
+      //
+      // payment is delegated to Razorpay's checkout origin rather than being
+      // denied outright. Razorpay Standard Checkout runs in an iframe it
+      // injects itself, and the Payment Request API behind its UPI and
+      // Google Pay options is gated on this header -- with `payment=()` those
+      // methods disappear from the modal and nothing explains why. `self` is
+      // listed because the injected frame is same-origin until it navigates.
       {
         key: "Permissions-Policy",
-        value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+        value:
+          'camera=(self), microphone=(), geolocation=(), ' +
+          'payment=(self "https://checkout.razorpay.com" "https://api.razorpay.com"), ' +
+          "usb=(), interest-cohort=()",
       },
     ];
 
@@ -71,6 +81,28 @@ const nextConfig = {
       // Vercel caps request bodies at 4.5 MB whatever this says; the receipt
       // scanner shrinks images to stay under 4 MB before uploading.
       bodySizeLimit: "4.5mb",
+    },
+
+    // How long a navigation will reuse an already-fetched page from the
+    // client Router Cache instead of asking the server again. This is what
+    // makes the hover prefetch in components/navigation worth doing: Next 15
+    // defaults `dynamic` to 0, which marks a dynamic page stale the instant
+    // it arrives, so a payload fetched on hover would be thrown away and
+    // refetched on the click a moment later.
+    //
+    // 30s is the Next 14 default, restored deliberately rather than raised
+    // further. Every page under (main) shows money, and the figure somebody
+    // reads has to be the figure in the database -- so the window is long
+    // enough to cover hover-then-click and a glance back at a page just
+    // visited, and short enough that nothing goes visibly out of date.
+    //
+    // Mutations do not wait for it to expire: the server actions in actions/
+    // call revalidatePath on every write, which drops the matching entries
+    // immediately. The risk this leaves is narrow -- a write from somewhere
+    // else, another tab or a webhook, within the window.
+    staleTimes: {
+      dynamic: 30,
+      static: 180,
     },
   },
 };

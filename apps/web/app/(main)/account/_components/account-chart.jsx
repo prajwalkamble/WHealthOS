@@ -9,10 +9,10 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import { format, parseISO, subDays } from 'date-fns';
 import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { useCurrency } from "@/components/currency-provider";
 
 const DATE_RANGES = {
   "7D": { label: "Last 7 Days", days: 7 },
@@ -36,6 +36,10 @@ const CHART_CONFIG = {
 // chart used to be drawn from the transaction table's rows, which stop at
 // the most recent 500, so "All Time" and its totals were silently incomplete.
 export function AccountChart ({ dailyTotals }) {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency, formatCompact: formatCompactCurrency } = useCurrency();
+
   const [dateRange, setDateRange] = useState("1M");
 
   const filteredData = useMemo(() => {

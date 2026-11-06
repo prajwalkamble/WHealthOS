@@ -1,3 +1,9 @@
+"use client";
+
+// A client component, which it effectively already was: the guest demo
+// and the landing page both render it inside their own client trees.
+// Saying so explicitly is what lets it read the display currency from
+// context instead of being handed one by three different callers.
 import { Plus, Sparkles, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CreateAccountDrawer from "@/components/create-account-drawer";
@@ -9,7 +15,8 @@ import {
   WidgetHeader,
   percentChange,
 } from "@/components/dashboard/widget";
-import { formatCurrency, formatCompactCurrency } from "@/lib/format";
+import { useCurrency } from "@/components/currency-provider";
+import { formatCurrency as formatInDefault } from "@/lib/currency/format";
 import { APP_TIME_ZONE, monthBounds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +58,7 @@ const monthStartLabel = () => {
 // Balance: % change against the balance at the start of the month. Only when
 // there was no opening balance (an account opened at zero this month) is
 // there nothing to divide by, and the change is shown in rupees instead.
-function balanceBadge({ accountCount, hasTransactions, balanceSince }) {
+function balanceBadge({ accountCount, hasTransactions, balanceSince, format = formatInDefault }) {
   if (accountCount === 0) {
     return {
       badge: <StatusBadge icon={Sparkles}>Get started</StatusBadge>,
@@ -71,7 +78,7 @@ function balanceBadge({ accountCount, hasTransactions, balanceSince }) {
   if (balanceSince && balanceSince.start > 0) {
     return {
       badge: <TrendBadge value={percentChange(balanceSince.now, balanceSince.start)} />,
-      caption: `vs ${formatCurrency(balanceSince.start)} on ${monthStartLabel()}`,
+      caption: `vs ${format(balanceSince.start)} on ${monthStartLabel()}`,
     };
   }
   // Every account was opened this month: there is no earlier balance, so
@@ -86,7 +93,7 @@ const pct = (value) => `${value.toFixed(1)}%`;
 
 // Income: % change against last month once last month had income; before
 // that, income's share of all the money that moved this month.
-function incomeBadge({ hasTransactions, income, expenses, previous }) {
+function incomeBadge({ hasTransactions, income, expenses, previous, format = formatInDefault }) {
   if (!hasTransactions) {
     return {
       badge: <StatusBadge>Not tracked yet</StatusBadge>,
@@ -96,7 +103,7 @@ function incomeBadge({ hasTransactions, income, expenses, previous }) {
   if (previous > 0) {
     return {
       badge: <TrendBadge value={percentChange(income, previous)} />,
-      caption: `vs ${formatCurrency(previous)} last month`,
+      caption: `vs ${format(previous)} last month`,
     };
   }
   const moved = income + expenses;
@@ -113,7 +120,7 @@ function incomeBadge({ hasTransactions, income, expenses, previous }) {
 
 // Expenses: % change against last month once last month had spending;
 // before that, spending as a share of this month's income -- lower is better.
-function expensesBadge({ hasTransactions, income, expenses, previous }) {
+function expensesBadge({ hasTransactions, income, expenses, previous, format = formatInDefault }) {
   if (!hasTransactions) {
     return {
       badge: <StatusBadge>Not tracked yet</StatusBadge>,
@@ -132,7 +139,7 @@ function expensesBadge({ hasTransactions, income, expenses, previous }) {
           multiplier
         />
       ),
-      caption: `vs ${formatCurrency(previous)} last month`,
+      caption: `vs ${format(previous)} last month`,
     };
   }
   if (income <= 0) {
@@ -155,7 +162,7 @@ function expensesBadge({ hasTransactions, income, expenses, previous }) {
 // Savings rate: the change in points against last month's rate when both
 // months have income; before that, the rate itself, coloured by whether it
 // clears the 20% people are usually advised to keep.
-function savingsBadge({ hasTransactions, rate, previousRate, net }) {
+function savingsBadge({ hasTransactions, rate, previousRate, net, format = formatInDefault }) {
   if (!hasTransactions) {
     return {
       badge: <StatusBadge>Not tracked yet</StatusBadge>,
@@ -169,8 +176,14 @@ function savingsBadge({ hasTransactions, rate, previousRate, net }) {
     };
   }
   if (previousRate !== null) {
+    // Points, not per cent, and the badge has to say so. The figure beside it
+    // is already a percentage, so a bare "+43.0%" on a rate that went from
+    // 19% to 62% invites being read as 43% more saved -- when what happened
+    // is 43 points more of income kept, which is a different and much larger
+    // claim. "pts" is the shortest honest label for a difference between two
+    // percentages.
     return {
-      badge: <TrendBadge value={rate - previousRate} />,
+      badge: <TrendBadge value={rate - previousRate} suffix=" pts" />,
       caption: `vs ${previousRate.toFixed(1)}% last month · aim for 20%+`,
     };
   }
@@ -180,12 +193,18 @@ function savingsBadge({ hasTransactions, rate, previousRate, net }) {
     caption:
       rate >= 0
         ? "of income kept · aim for 20%+"
-        : `${formatCurrency(Math.abs(net))} more spent than earned this month`,
+        : `${format(Math.abs(net))} more spent than earned this month`,
   };
 }
 
 // guest: demo mode, where creating an account would need a signed-in user.
 const StatCards = ({ summary, accountCount, hasTransactions, guest = false }) => {
+  // Bound to the display currency the viewer chose. Passed down into the
+  // badge helpers below rather than imported by them: they are module-level
+  // pure functions, and a formatter captured at module load is a formatter
+  // fixed to one currency for the life of the process.
+  const { format: formatCurrency } = useCurrency();
+
   const {
     totalBalance,
     monthlyIncome,
@@ -195,20 +214,23 @@ const StatCards = ({ summary, accountCount, hasTransactions, guest = false }) =>
     previous,
   } = summary;
 
-  const balance = balanceBadge({ accountCount, hasTransactions, balanceSince: summary.balanceSince });
+  const balance = balanceBadge({ accountCount, hasTransactions, balanceSince: summary.balanceSince, format: formatCurrency });
   const income = incomeBadge({
+    format: formatCurrency,
     hasTransactions,
     income: monthlyIncome,
     expenses: monthlyExpenses,
     previous: previous.income,
   });
   const expenses = expensesBadge({
+    format: formatCurrency,
     hasTransactions,
     income: monthlyIncome,
     expenses: monthlyExpenses,
     previous: previous.expenses,
   });
   const savings = savingsBadge({
+    format: formatCurrency,
     hasTransactions,
     rate: savingsRate,
     previousRate: previous.savingsRate,

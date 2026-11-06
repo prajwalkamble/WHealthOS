@@ -2,10 +2,11 @@ import { getUserAccounts } from "@/lib/queries";
 import AccountCard from "../dashboard/_components/account-card";
 import CreateAccountDrawer from "@/components/create-account-drawer";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/format";
+import AccountsTotal from "./_components/accounts-total";
 import { Plus } from "lucide-react";
 
 export default async function AccountsPage() {
+
   const accounts = await getUserAccounts();
   const total = accounts.reduce((sum, account) => sum + account.balance, 0);
 
@@ -15,9 +16,7 @@ export default async function AccountsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
           <p className="text-sm text-muted-foreground">
-            {accounts.length === 0
-              ? "No accounts yet."
-              : `${accounts.length} account${accounts.length > 1 ? "s" : ""}, ${formatCurrency(total)} in total.`}
+            <AccountsTotal count={accounts.length} total={total} />
           </p>
         </div>
       </div>

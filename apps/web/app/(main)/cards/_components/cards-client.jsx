@@ -13,12 +13,16 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { formatCurrency } from "@/lib/format";
 import { deleteCard, setCardStatus } from "@/actions/cards";
 import CardForm from "./card-form";
 import CardTile from "./card-tile";
+import { useCurrency } from "@/components/currency-provider";
 
 const CardsClient = ({ cards, accounts }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);

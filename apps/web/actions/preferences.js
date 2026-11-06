@@ -5,7 +5,8 @@ import { runAction } from "@/lib/action-error";
 import { enforceRateLimit } from "@/lib/arcjet";
 import { requireClerkUserId } from "@/lib/session";
 import { revalidatePath } from "next/cache";
-import { normalise } from "@/lib/preferences";
+import { changedSettings, normalise, SETTING_ENTITLEMENTS } from "@/lib/preferences";
+import { requireFeatureInAction } from "@/lib/billing/guard";
 
 // The whole appearance set, saved together. normalise drops anything that is
 // not a known setting with a known value, so a crafted payload cannot put
@@ -17,9 +18,29 @@ export async function savePreferences(rawPreferences) {
 
     const preferences = normalise(rawPreferences);
 
-    await withCurrentTenant((tx, userId) =>
-      tx.user.update({ where: { id: userId }, data: { preferences } })
-    );
+    await withCurrentTenant(async (tx, userId) => {
+      // Customisation is sold: "appearance.customize" and
+      // "dashboard.customize" are Pro rows on the pricing page, while the
+      // light/dark switch is free. So the gate is per setting and only on the
+      // ones actually changing -- the browser posts the whole set every time,
+      // and refusing the lot would take the free theme switch away too.
+      const current = await tx.user.findUnique({
+        where: { id: userId },
+        select: { preferences: true },
+      });
+      const before = normalise(current?.preferences);
+
+      const needed = new Set(
+        changedSettings(before, preferences)
+          .map((key) => SETTING_ENTITLEMENTS[key])
+          .filter(Boolean)
+      );
+      for (const entitlement of needed) {
+        await requireFeatureInAction(userId, entitlement, { tx });
+      }
+
+      return tx.user.update({ where: { id: userId }, data: { preferences } });
+    });
 
     // No revalidate: the browser has already applied them, and every page
     // reads them from the attributes on <html>.

@@ -10,6 +10,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+// The application default, deliberately, and not the viewer's display
+// currency. These calculators live on the marketing site, which is statically
+// generated -- reading a cookie or a geolocation header here would make every
+// marketing page render per request for a figure nobody is reading as their
+// own money. They are illustrative sums, not anybody's balance.
 import { formatCurrency } from "@/lib/format";
 
 // The parts every tool form is built from.

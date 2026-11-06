@@ -45,6 +45,27 @@ vi.mock("@/lib/arcjet", () => ({
   },
 }));
 
+// The plan check. This suite is about the assistant, not about billing: what
+// the gate does is tests/billing-integration.test.js's subject, and leaving it
+// unmocked here would have every one of these tests depend on a database.
+//
+// It returns the plan that includes WHOS, so these exercise the path a
+// subscriber takes. The refusal path has its own test below.
+let plan = "intelligent";
+vi.mock("@/lib/billing/guard", async () => {
+  const { EntitlementError } = await vi.importActual("@/lib/billing/entitlements");
+  return {
+    requireFeature: async (_userId, key) => {
+      if (plan === "intelligent") return plan;
+      throw new EntitlementError(key, plan);
+    },
+  };
+});
+
+vi.mock("@/lib/prisma", () => ({
+  getCurrentUserId: async () => "internal-user-id",
+}));
+
 vi.mock("@/lib/queries", () => ({
   getAgentFinancialContext: async (sections) => {
     contextCalls.push(sections);
@@ -158,6 +179,26 @@ describe("Who may ask WHOS anything", () => {
   it("never caches an answer", async () => {
     const response = await ask({ message: "What is inflation?" });
     expect(response.headers.get("Cache-Control")).toBe("no-store, private");
+  });
+
+  it("refuses a plan that does not include WHOS, before spending a token", async () => {
+    plan = "pro";
+    try {
+      const response = await ask({ message: "How much did I spend?" });
+
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body.code).toBe("FORBIDDEN");
+      // Names the plan that would fix it rather than saying "forbidden".
+      expect(body.error).toMatch(/Intelligent plan/);
+
+      // The whole reason the check sits where it does: no figures were read
+      // and no provider call was made, so a locked feature costs nothing.
+      expect(contextCalls).toEqual([]);
+      expect(streamCalls).toEqual([]);
+    } finally {
+      plan = "intelligent";
+    }
   });
 });
 
@@ -455,15 +496,44 @@ describe("What this ledger cannot represent", () => {
     expect(caveats).toContain("inflates both totals");
   });
 
-  it("states that every amount is one currency, because the schema has no other", () => {
+  // This guard used to assert the opposite: that the ledger had NO currency
+  // column, and that the assistant could therefore say "every amount is in
+  // Indian rupees". The multi-currency migration made that false, and this
+  // test is what caught it -- which is what it was built to do.
+  //
+  // It now pins the replacement claim, which is narrower and survives the
+  // schema it describes: records carry a currency, nothing in this path
+  // converts between them, and a total over mixed currencies is not to be
+  // quoted as a figure.
+  it("does not claim a currency the records no longer guarantee", () => {
     const schema = readFileSync(
       path.resolve(WEB, "../../database/prisma/schema.prisma"),
       "utf8"
     );
-    // The claim below is only true while this holds.
-    expect(schema).not.toMatch(/currency\s+String/i);
-    expect(caveats).toContain("Every amount is in Indian rupees");
-    expect(caveats).toContain("no conversion anywhere");
+    // The ledger the assistant reads does carry a currency now. Asserted, so
+    // that removing those columns again would also have to revisit this.
+    const billingAt = schema.indexOf("// --- Billing");
+    expect(billingAt, "the billing block moved -- re-check this guard").toBeGreaterThan(-1);
+    expect(schema.slice(0, billingAt)).toMatch(/currency\s+String/i);
+
+    // The old claim must be gone, not merely softened.
+    expect(caveats).not.toContain("Every amount is in Indian rupees");
+
+    expect(caveats).toContain("added up without regard to currency");
+    expect(caveats).toContain("No exchange rate is applied");
+    expect(caveats).toContain("Never convert an amount yourself");
+  });
+
+  // The loaders sum amounts and do not read the currency column. While that
+  // is true, the caveat above is the only thing standing between a
+  // mixed-currency account and a confidently wrong total, so it is pinned to
+  // the code rather than to anybody remembering.
+  it("does not convert currencies anywhere in what the assistant reads", () => {
+    const queries = read("lib/queries.js");
+    const loader = queries.slice(queries.indexOf("async function agentCategoriesFor"));
+    for (const forbidden of ["convertAmount", "sumInCurrency", "rateFor"]) {
+      expect(loader, forbidden).not.toContain(forbidden);
+    }
   });
 
   it("admits the totals include pending and failed transactions", () => {
@@ -1167,75 +1237,63 @@ describe("The WHOS mark", () => {
   const mono = read("public/brand/whos-mark-mono.svg");
   const brand = read("public/brand/whos-mark.svg");
 
-  const pathOf = (source) => source.match(/d="(M[^"]+)"/)?.[1] ?? null;
-  const numbers = (d) => d.match(/-?\d+\.?\d*/g).map(Number);
+  // The assistant used to carry its own letterform: a four-stroke zigzag with
+  // mitered, flat-clipped joins, drawn when it was the only thing in the
+  // product with a symbol. It was a second W doing the first one's job, and
+  // the two were free to drift. It is now the identity's mark, so what is
+  // asserted here is that it still *is* that mark -- the geometry itself is
+  // tested in tests/brand-logo.test.js, at the source.
+
+  it("is the brand's W, imported rather than redrawn", () => {
+    expect(component).toMatch(/from "[^"]*brand\/identity\.mjs"/);
+    expect(component).toContain("ICON.path");
+    expect(component).toContain("ICON.arrowhead");
+    // No literal path data: that is what drifting looks like.
+    expect(component).not.toMatch(/d="M[\d.]/);
+  });
 
   it("is the same drawing in the component and in both files", () => {
-    // Three copies of one shape. A change to any one of them without the
-    // others is how a logo quietly becomes two logos.
-    const fromComponent = component.match(/"(M[\d.,\sLZ-]+)"/)?.[1];
-    expect(fromComponent).toBeTruthy();
-    expect(pathOf(mono)).toBe(fromComponent);
-    expect(pathOf(brand)).toBe(fromComponent);
+    // Three renderings of one shape. They are all generated from the identity
+    // by scripts/build-brand-assets.mjs, so this is what catches one of them
+    // being edited by hand afterwards.
+    const pathOf = (source) => source.match(/<path d="(M[^"]+)"/)?.[1] ?? null;
+    expect(pathOf(mono)).toBeTruthy();
+    expect(pathOf(brand)).toBe(pathOf(mono));
+
+    const headOf = (source) => source.match(/<path d="(M[^"]+Z)" fill/)?.[1] ?? null;
+    expect(headOf(mono)).toBeTruthy();
+    expect(headOf(brand)).toBe(headOf(mono));
   });
 
-  it("is genuinely a W: four strokes, two valleys, one apex", () => {
-    const d = pathOf(mono);
+  it("keeps the arrowhead, which is the thing a smaller mark loses first", () => {
+    for (const file of [mono, brand]) {
+      // Two subpaths: the stroked letter, and the filled head that ends it.
+      expect((file.match(/<path/g) ?? []).length).toBe(2);
+      expect(file).toMatch(/fill="none"[^>]*stroke=/);
+      expect(file).toMatch(/d="M[^"]+Z"/);
+    }
+  });
+
+  it("stays inside its viewBox, with room to breathe", () => {
+    const numbers = (d) => d.match(/-?\d+\.?\d*/g).map(Number);
+    const transform = mono.match(/translate\(([-\d.]+) ([-\d.]+)\) scale\(([\d.]+)\)/);
+    expect(transform, "the mark is not placed by a fitted transform").toBeTruthy();
+    const [, tx, ty, scale] = transform.map(Number);
+
+    const d = mono.match(/<path d="(M[^"]+)"/)[1];
     const n = numbers(d);
-    const xs = n.filter((_, i) => i % 2 === 0);
-    const ys = n.filter((_, i) => i % 2 === 1);
+    const stroke = Number(mono.match(/stroke-width="([\d.]+)"/)[1]);
+    const xs = n.filter((_, i) => i % 2 === 0).map((x) => x * scale + tx);
+    const ys = n.filter((_, i) => i % 2 === 1).map((y) => y * scale + ty);
+    const r = (stroke / 2) * scale;
 
-    // A single closed outline, no second subpath and no curves: this is a
-    // letterform built from straight strokes, not an icon with a W on it.
-    expect((d.match(/M/g) ?? []).length).toBe(1);
-    expect(d).not.toMatch(/[CcSsQqTtAa]/);
-    expect(d.endsWith("Z")).toBe(true);
-
-    const bottom = Math.max(...ys);
-    const top = Math.min(...ys);
-
-    // Two valleys. Each one is a clipped flat floor, so it contributes two
-    // points rather than a single vertex -- they are grouped by proximity
-    // instead of counted raw.
-    const cluster = (values, gap) =>
-      [...values].sort((a, b) => a - b).reduce((groups, v) => {
-        const last = groups[groups.length - 1];
-        if (last && v - last[last.length - 1] <= gap) last.push(v);
-        else groups.push([v]);
-        return groups;
-      }, []);
-
-    const atBottom = xs.filter((_, i) => ys[i] > bottom - 0.2);
-    expect(cluster(atBottom, 4)).toHaveLength(2);
-
-    // Both outer terminals sit on one shared cap line.
-    const atTop = xs.filter((_, i) => ys[i] < top + 0.01);
-    expect(cluster(atTop, 6)).toHaveLength(2);
-
-    // The apex rises between the valleys but stops below the cap line.
-    const apexY = Math.min(...ys.filter((y) => y > top + 0.01));
-    expect(apexY).toBeGreaterThan(top);
-    expect(apexY).toBeLessThan(bottom - 5);
-  });
-
-  it("stays inside its viewBox, centred, with room to breathe", () => {
-    const n = numbers(pathOf(mono));
-    const xs = n.filter((_, i) => i % 2 === 0);
-    const ys = n.filter((_, i) => i % 2 === 1);
-    const [x0, x1] = [Math.min(...xs), Math.max(...xs)];
-    const [y0, y1] = [Math.min(...ys), Math.max(...ys)];
-
-    // Nothing clipped. An unclipped miter on a W's valleys overflows by six
-    // units or more, which is what the clipped joins exist to prevent.
-    expect(x0).toBeGreaterThanOrEqual(0);
-    expect(y0).toBeGreaterThanOrEqual(0);
-    expect(x1).toBeLessThanOrEqual(32);
-    expect(y1).toBeLessThanOrEqual(32);
-    // Optically centred on both axes.
-    expect(Math.abs((x0 + x1) / 2 - 16)).toBeLessThan(0.5);
-    expect(Math.abs((y0 + y1) / 2 - 16)).toBeLessThan(0.5);
-    // Wider than tall, as a W is.
-    expect((x1 - x0) / (y1 - y0)).toBeGreaterThan(1.1);
+    expect(Math.min(...xs) - r).toBeGreaterThanOrEqual(0);
+    expect(Math.min(...ys) - r).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...xs) + r).toBeLessThanOrEqual(32);
+    expect(Math.max(...ys) + r).toBeLessThanOrEqual(32);
+    // Wider than tall, as a W with a rising tail is.
+    expect((Math.max(...xs) - Math.min(...xs)) / (Math.max(...ys) - Math.min(...ys)))
+      .toBeGreaterThan(1.1);
   });
 
   it("carries no raster, filter, mask or outside dependency", () => {
@@ -1249,17 +1307,18 @@ describe("The WHOS mark", () => {
 
   it("has a monochrome variant that takes the colour around it", () => {
     expect(mono).toContain('fill="currentColor"');
+    expect(mono).toContain('stroke="currentColor"');
     expect(mono).not.toContain("linearGradient");
+    // The component is the monochrome one: eighteen palettes and a dark mode,
+    // so a fixed hue in the interface would clash with most accounts.
+    expect(component).toContain('stroke="currentColor"');
     expect(component).toContain('fill="currentColor"');
   });
 
-  it("uses the brand ramp already defined in globals.css, and only as an option", () => {
-    const css = read("app/globals.css");
-    expect(css).toContain("from-blue-600 to-purple-600");
-    // blue-600 and purple-600, the same pair, as explicit hex.
-    expect(brand).toContain("#2563eb");
-    expect(brand).toContain("#9333ea");
+  it("has a fixed-colour variant on the brand ramp, as an option", () => {
     expect(brand).toContain("linearGradient");
+    expect(brand).toContain("#1266ED");
+    expect(brand).toContain("#851FEA");
   });
 
   it("is what the assistant actually shows, in both places", () => {

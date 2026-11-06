@@ -7,15 +7,21 @@ import { AddTransactionForm } from "@/app/(main)/transaction/_components/transac
 import { Skeleton } from "@/components/ui/skeleton";
 import { defaultCategories } from "@/data/categories";
 import { useDemo } from "../../_components/demo-provider";
+import { useCurrency } from "@/components/currency-provider";
 
 // The signed-in form, handed a guest submit handler instead of the server
 // action. The receipt scanner inside it locks itself in this mode.
 export default function DemoAddTransactionPage() {
   const router = useRouter();
   const { accounts, addTransaction } = useDemo();
+  // The guest types an amount in the currency they are READING. The demo's
+  // records are held in INR, so it is converted back on the way in -- which
+  // is what keeps their row in step with the sample data when they switch
+  // currency again afterwards.
+  const { toLedger } = useCurrency();
 
   const onGuestSubmit = (data) => {
-    addTransaction(data);
+    addTransaction(data, toLedger);
     toast.success("Added to your demo. It stays in this browser.");
     router.push("/demo/transactions");
   };

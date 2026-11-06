@@ -3,6 +3,9 @@ import { AGENT_LIMITS } from "@/lib/ai/agent-config";
 import { agentChatSchema } from "@/app/lib/schema";
 import { enforceRateLimit } from "@/lib/arcjet";
 import { requireClerkUserId } from "@/lib/session";
+import { getCurrentUserId } from "@/lib/prisma";
+import { requireFeature } from "@/lib/billing/guard";
+import { EntitlementError } from "@/lib/billing/entitlements";
 
 // WHOS's one endpoint.
 //
@@ -51,7 +54,26 @@ export async function POST(request) {
     );
   }
 
-  // 3. Is the body a sane size and shape.
+  // 3. Does their plan include asking WHOS anything.
+  //
+  //    Before the body is read and long before a token is spent, for the same
+  //    reason the rate limit is: this is the control that bounds the bill.
+  //    The plan comes from the subscription row, never from the request.
+  try {
+    await requireFeature(await getCurrentUserId(), "ai.queries");
+  } catch (error) {
+    if (error instanceof EntitlementError) {
+      return fail(
+        "WHOS - Financial Intelligence is part of the Intelligent plan. Upgrade in Settings to ask it questions.",
+        403,
+        "FORBIDDEN"
+      );
+    }
+    console.error({ code: "WHOS_ENTITLEMENT_CHECK_FAILED", error });
+    return fail("Could not check your plan just now. Please try again.", 503, "UNAVAILABLE");
+  }
+
+  // 4. Is the body a sane size and shape.
   const declared = Number(request.headers.get("content-length") ?? 0);
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
     return fail("That message is too long.", 413, "TOO_LARGE");

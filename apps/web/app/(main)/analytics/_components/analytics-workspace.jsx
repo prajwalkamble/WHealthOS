@@ -11,13 +11,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { defaultCategories } from "@/data/categories";
-import { formatCurrency } from "@/lib/format";
 import { change } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { ExportButton } from "@/components/export-drawer";
 import CashflowSankey from "./cashflow-sankey";
 import FlowChart from "./flow-chart";
 import CategoryTable from "./category-table";
+import { useCurrency } from "@/components/currency-provider";
 
 const CATEGORY_NAME = new Map(defaultCategories.map((c) => [c.id, c.name]));
 const ALL = "__all__";
@@ -65,6 +65,10 @@ const Headline = ({ label, value, delta, invert }) => (
 );
 
 const AnalyticsWorkspace = ({ data, filters }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const router = useRouter();
   const params = useSearchParams();
   // The navigation a filter change causes is a server round trip. Tracking it

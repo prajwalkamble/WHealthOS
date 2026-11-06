@@ -9,8 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/currency-provider";
 
 // Where the spending actually went, and what moved since the period before.
 //
@@ -47,6 +47,10 @@ const Change = ({ value, previousAmount }) => {
 };
 
 const CategoryTable = ({ rows, categoryName, periodLabel, previousLabel, hasPriorData }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const spending = rows.filter((r) => r.amount > 0 || r.previousAmount > 0);
 
   return (

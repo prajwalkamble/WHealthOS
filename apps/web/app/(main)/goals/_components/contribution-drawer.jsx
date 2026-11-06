@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/drawer";
 import { addContribution, deleteContribution } from "@/actions/goals";
 import { getGoalContributionsAction } from "@/actions/goals-read";
-import { formatCurrency } from "@/lib/format";
 import { APP_TIME_ZONE } from "@/lib/time";
+import { useCurrency } from "@/components/currency-provider";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -31,6 +31,10 @@ const dateLabel = (iso) =>
 // real rows, not a derived guess -- if there are none, it says so rather than
 // drawing an empty chart.
 const ContributionDrawer = ({ goal, onOpenChange, onSaved }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today());
   const [note, setNote] = useState("");

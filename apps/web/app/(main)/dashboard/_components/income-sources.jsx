@@ -1,4 +1,10 @@
-import Link from "next/link";
+"use client";
+
+// A client component, which it effectively already was: the guest demo
+// and the landing page both render it inside their own client trees.
+// Saying so explicitly is what lets it read the display currency from
+// context instead of being handed one by three different callers.
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +17,7 @@ import {
   percentChange,
 } from "@/components/dashboard/widget";
 import { categoryColors, defaultCategories } from "@/data/categories";
-import { formatCurrency } from "@/lib/format";
+import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
   defaultCategories.map((category) => [category.id, category.name])
@@ -20,6 +26,12 @@ const LABELS = Object.fromEntries(
 // This month's income by category: the total, how it compares with last
 // month, a segmented bar of the split, and the categories ranked.
 const IncomeSources = ({ rows, total, previousTotal }) => {
+  // Bound to the display currency the viewer chose. This component is
+  // shared by the signed-in dashboard, the guest demo and the landing
+  // page, and it formats correctly in all three without any of them
+  // telling it which currency to use.
+  const { format: formatCurrency } = useCurrency();
+
   const slices = rows.map((row, index) => ({
     ...row,
     label: LABELS[row.category] ?? row.category,
@@ -37,9 +49,9 @@ const IncomeSources = ({ rows, total, previousTotal }) => {
         title="Income Sources"
         action={
           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <Link href="/transactions" aria-label="All transactions">
+            <PrefetchLink href="/transactions" aria-label="All transactions">
               <ArrowUpRight className="h-4 w-4" />
-            </Link>
+            </PrefetchLink>
           </Button>
         }
       />

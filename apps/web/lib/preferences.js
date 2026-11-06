@@ -154,6 +154,45 @@ export const SETTINGS = {
 
 export const SETTING_KEYS = Object.keys(SETTINGS);
 
+// Which entitlement each setting needs, or null for one every plan includes.
+//
+// The pricing table sells customisation in two rows -- "appearance.customize"
+// and "dashboard.customize" -- while the light/dark switch is "theme.toggle",
+// which is on every plan including Free. So this cannot be a gate on
+// savePreferences as a whole: that one action carries all ten settings, and
+// refusing it outright would take the free theme switch away from free
+// accounts.
+//
+// Data rather than a conditional in the action, so a new setting has to
+// declare which side of the paywall it is on. tests/preferences-gating.test.js
+// fails if a key here is unknown, if a SETTING_KEY is missing, or if the
+// entitlement named is not in the published matrix.
+export const SETTING_ENTITLEMENTS = {
+  themeColor: "appearance.customize",
+  chartColors: "appearance.customize",
+  font: "appearance.customize",
+  displayFont: "appearance.customize",
+  scale: "appearance.customize",
+  radius: "appearance.customize",
+  // next-themes owns this one: it is the light/dark switch, and it is free.
+  colorSchema: null,
+  contentLayout: "dashboard.customize",
+  sidebarCollapsible: "dashboard.customize",
+  sidebarVariant: "dashboard.customize",
+};
+
+// The settings that differ between two normalised preference sets.
+//
+// Gating is on what somebody is *changing*, not on what the payload contains.
+// The browser posts all ten settings every time, so gating on presence would
+// refuse a free account's theme switch because the same body also carried an
+// unchanged font. It also means an account that set a paid option while
+// enforcement was off keeps it: nothing here strips a stored value, it only
+// refuses a new one.
+export function changedSettings(before, after) {
+  return SETTING_KEYS.filter((key) => (before?.[key] ?? null) !== (after?.[key] ?? null));
+}
+
 export const DEFAULT_PREFERENCES = Object.fromEntries(
   SETTING_KEYS.map((key) => [key, SETTINGS[key].default])
 );

@@ -3,6 +3,11 @@ import { ActionError } from "@/lib/action-error";
 import { defaultCategories } from "@/data/categories";
 import { CONTACT_TOPICS } from "@/lib/company/contact";
 import { AGENT_LIMITS } from "@/lib/ai/agent-config";
+import { INTERVALS, paidPlanIds } from "@/lib/billing/plans";
+
+// The plans that can actually be bought, as a tuple for z.enum. Built from
+// the catalogue so adding a tier does not mean remembering this file.
+const PAID_PLAN_IDS = paidPlanIds();
 
 // --- Form schemas -----------------------------------------------------------
 // These describe what the *browser form* holds, where number inputs are still
@@ -422,6 +427,47 @@ export const agentChatSchema = z.object({
     .regex(/^[A-Za-z0-9_-]{1,64}$/, "Invalid conversation id")
     .optional(),
 });
+
+// --- Billing (Razorpay subscriptions) ---------------------------------------
+// What the billing endpoints accept.
+//
+// Note what the checkout schema does NOT take: an amount, a currency, or a
+// Razorpay plan id. Each of those is a commercially significant value, and a
+// commercially significant value in a request body is a value the buyer gets
+// to choose. They are resolved on the server in lib/billing/plans.js.
+
+export const billingCheckoutSchema = z.object({
+  planId: z.enum(PAID_PLAN_IDS, {
+    errorMap: () => ({ message: "Choose a plan to upgrade to" }),
+  }),
+  interval: z.enum(INTERVALS, {
+    errorMap: () => ({ message: "Choose monthly or yearly billing" }),
+  }),
+});
+
+// Razorpay's own id shapes. Checking them here means the HMAC is only ever
+// computed for something that could plausibly be a signature, and a missing
+// field is a 400 before any crypto runs.
+const razorpayId = (prefix, label) =>
+  z
+    .string({ required_error: `Missing ${label}` })
+    .trim()
+    .regex(new RegExp(`^${prefix}_[A-Za-z0-9]{1,30}$`), `Invalid ${label}`);
+
+// The three fields a SUBSCRIPTION checkout returns. Deliberately not the same
+// shape as an order checkout: that one carries razorpay_order_id, and the
+// signature over it is computed the other way round. Two schemas rather than
+// one with optional fields, so a handler cannot be handed the wrong one.
+export const billingVerifySchema = z.object({
+  razorpay_payment_id: razorpayId("pay", "payment id"),
+  razorpay_subscription_id: razorpayId("sub", "subscription id"),
+  razorpay_signature: z
+    .string({ required_error: "Missing signature" })
+    .trim()
+    .regex(/^[a-f0-9]{64}$/, "Invalid signature"),
+});
+
+export const billingPlanChangeSchema = billingCheckoutSchema;
 
 // Turns a ZodError into the single-line message the client toasts.
 export function parseOrThrow(schema, value) {

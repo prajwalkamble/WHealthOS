@@ -1,6 +1,7 @@
 "use server";
 
 import { withCurrentTenant } from "@/lib/prisma";
+import { requireFeatureInAction } from "@/lib/billing/guard";
 import { budgetEntrySchema, budgetInputSchema, parseOrThrow } from "@/app/lib/schema";
 import { revalidatePath } from "next/cache";
 import { ActionError, runAction } from "@/lib/action-error";
@@ -24,6 +25,10 @@ export async function updateBudget(rawAmount) {
     // arrived. The overall budget is the row whose category is null, and the
     // partial unique index in the migration keeps there being only one.
     const budget = await withCurrentTenant(async (tx, userId) => {
+      // Budgets is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "budgets", { tx });
+
       const existing = await tx.budget.findFirst({
         where: { userId, category: null },
         select: { id: true },
@@ -53,6 +58,10 @@ export async function saveBudgetEntry(raw) {
     const { amount, category } = parseOrThrow(budgetEntrySchema, raw);
 
     const budget = await withCurrentTenant(async (tx, userId) => {
+      // Budgets is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "budgets", { tx });
+
       const existing = await tx.budget.findFirst({
         where: { userId, category },
         select: { id: true },
@@ -75,6 +84,10 @@ export async function deleteBudgetEntry(id) {
     await enforceRateLimit("write", clerkUserId);
 
     await withCurrentTenant(async (tx, userId) => {
+      // Budgets is a paid feature. The plan is resolved from the subscription
+      // row inside this same transaction -- never from the request.
+      await requireFeatureInAction(userId, "budgets", { tx });
+
       // Scoped by userId as well as id: an id alone would be a lookup anyone
       // could guess at, and a zero count means the row was not the caller's.
       const { count } = await tx.budget.deleteMany({ where: { id, userId } });

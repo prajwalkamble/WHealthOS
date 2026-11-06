@@ -16,6 +16,8 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PreferencesProvider } from "@/components/preferences-provider";
+import { siteUrl } from "@/lib/site";
+import { OG_IMAGE } from "@/lib/brand/identity.mjs";
 import PreferencesScript from "@/components/preferences-script";
 
 // Every family the Font and Display Font settings offer, each exposed as a
@@ -27,10 +29,28 @@ import PreferencesScript from "@/components/preferences-script";
 // at build time, so they have to be literals -- a shared object spread into
 // them fails to compile.
 const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
+// No `weight` array, deliberately. Google published Roboto v51 as a VARIABLE
+// font, and asking a variable family for three static weights makes the font
+// service answer with its subset form -- a "/l/font?kit=...&skey=..." path
+// whose URL carries more than one query entry. Turbopack's next/font replacer
+// rejects that outright ("next/font/google queries have exactly one entry")
+// and the dev server fails to compile this file.
+//
+// The host is deliberately not written out here: tests/cookie-policy.test.js
+// greps every file under app/ and components/ for it, to keep the cookie
+// policy's "no third-party webfonts" claim honest. next/font downloads these
+// at build time and self-hosts them, so nothing is fetched from Google at
+// runtime -- but the guard is a blunt string match and is more valuable blunt
+// than clever.
+//
+// Omitting it takes the variable axis instead, which covers 100-900: strictly
+// more weights than the three that were pinned here, from one file.
+//
+// Poppins, PT Sans and Hedvig below are still static families, so their
+// weight arrays are correct and are left alone.
 const roboto = Roboto({
   subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "700"],
   variable: "--font-roboto",
 });
 const poppins = Poppins({
@@ -79,9 +99,46 @@ const fontVariables = [
   .map((font) => font.variable)
   .join(" ");
 
+// metadataBase is what turns a relative Open Graph image into the absolute
+// URL that Slack, WhatsApp and X require -- without it Next warns at build
+// time and a shared link renders bare. The title template means a page that
+// sets only its own name still gets the product on the end of it.
 export const metadata = {
-  title: "WHealthOS",
-  description: "Understand your money and make smarter decisions with WHealthOS.",
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: "WHealthOS",
+    template: "%s · WHealthOS",
+  },
+  description:
+    "Understand your money and make smarter decisions with WHealthOS.",
+  applicationName: "WHealthOS",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "WHealthOS",
+    url: "/",
+    title: "WHealthOS",
+    description:
+      "Understand your money and make smarter decisions with WHealthOS.",
+    // The card declared no image at all, while twitter.card below asked for
+    // `summary_large_image` -- so every link to the product rendered bare in
+    // Slack, WhatsApp and X. Relative on purpose: metadataBase above turns it
+    // into the absolute URL those scrapers require. Generated from the brand
+    // identity by scripts/build-brand-assets.mjs.
+    images: [
+      { url: `/${OG_IMAGE.path}`, width: OG_IMAGE.width, height: OG_IMAGE.height, alt: "WHealthOS" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "WHealthOS",
+    description:
+      "Understand your money and make smarter decisions with WHealthOS.",
+    images: [`/${OG_IMAGE.path}`],
+  },
+  // The signed-in app is disallowed in robots.txt; this is the same statement
+  // for a crawler that followed a link straight into it.
+  robots: { index: true, follow: true },
 };
 
 // Providers only. The header and footer belong to (marketing); the signed-in

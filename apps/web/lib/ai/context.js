@@ -326,8 +326,15 @@ export function caveatsFor(sections) {
     // person's own accounts is recorded as an expense on one and an income on
     // the other, and lands in both totals.
     "The ledger has no concept of a transfer. Money moved between the person's own accounts is recorded as an expense and an income, so it inflates both totals. Nothing here can identify or exclude it.",
-    // No currency column on Transaction or Account.
-    "Every amount is in Indian rupees. The records have no currency field, so there is no conversion anywhere and no way to hold a foreign-currency amount.",
+    // Accounts and transactions DO carry a currency now (the multi-currency
+    // migration added one, defaulting to INR). What they do not have is any
+    // conversion in this path: the loaders sum amounts without reading the
+    // column, so a total is only meaningful while every record behind it is
+    // in one currency. Saying "everything is rupees" would now be a claim the
+    // schema no longer supports, and saying nothing would let the assistant
+    // add dollars to yen and present the result as a figure.
+    "Amounts are added up without regard to currency. Every record carries one, and these totals are only meaningful if they are all the same -- which they are for an account that has only ever used one. If the person holds more than one currency, say that the total cannot be trusted and point them at the per-account figures rather than quoting it.",
+    "No exchange rate is applied anywhere in what you are reading. Never convert an amount yourself, and never state a figure in a currency other than the one the record is in.",
     // Every existing query -- the dashboard, the budgets, the analytics page --
     // filters by date and type and never by status, so these figures include
     // PENDING and FAILED rows. Matching that is deliberate: an assistant that

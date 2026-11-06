@@ -4,6 +4,17 @@ import { adminDb, withTenant } from "../prisma";
 import { inngest } from "./client";
 import EmailTemplate from "@/emails/template";
 import { generateContent } from "@/lib/ai/gemini";
+import { EntitlementError, requireEntitlement } from "@/lib/billing/entitlements";
+import { effectivePlanId } from "@/lib/billing/service";
+import { fetchRates } from "@/lib/currency/rates/provider";
+import { putRates } from "@/lib/currency/rates/store";
+import { MAX_ATTEMPTS, deliverActivation } from "@/lib/notifications/deliver";
+import {
+  ACTIVATION_SUBJECT_EVENT,
+  queueActivationNotification,
+  staleQueued,
+  subscriptionsMissingNotification,
+} from "@/lib/notifications/subscription-activated";
 import { uptimeSlot } from "@/lib/stats";
 import { nextOccurrenceAfter } from "@/lib/recurring";
 import {
@@ -493,6 +504,33 @@ export const sendMonthlyReport = inngest.createFunction(
       // so a retry takes the same branch a fresh query might not.
       if (!user.monthlyInsights) return null;
 
+      // AI insights are an Intelligent-plan feature. A background job has no
+      // session to authorise against, so the plan is resolved explicitly from
+      // the account the report belongs to -- the trusted service identity the
+      // rest of this file runs under -- and the entitlement is checked the
+      // same way a request would check it.
+      //
+      // Without this a Free account that left the Settings switch on received
+      // a paid feature by email every month, and we paid the model for it.
+      //
+      // Not entitled is a skip, not a failure: the report still goes out with
+      // the totals and the category breakdown, which is the path a model
+      // outage already takes. While BILLING_ENFORCEMENT is off,
+      // requireEntitlement logs and returns, so nothing changes until the
+      // operator turns enforcement on.
+      try {
+        requireEntitlement(await effectivePlanId(userId), "ai.insights");
+      } catch (error) {
+        if (error instanceof EntitlementError) {
+          console.warn(
+            `Monthly AI insights skipped for user ${userId}: the account's ` +
+              "plan does not include ai.insights. Sending figures only."
+          );
+          return null;
+        }
+        throw error;
+      }
+
       try {
         return await generateFinancialInsights(stats, monthName);
       } catch (error) {
@@ -614,3 +652,129 @@ const getMonthlyStats = async (userId, year, month) => {
     }
   );
 };
+
+
+// --- Subscription notifications ---------------------------------------------
+
+// Sending one subscription confirmation email.
+//
+// Queued by lib/notifications/subscription-activated.js at the moment a
+// verified payment activates a subscription. It is a separate function rather
+// than part of the webhook for the reason the brief gives in §6: the
+// subscriber must get access as soon as the subscription is active, and an
+// email provider being slow or down is not allowed to delay that or to fail
+// the activation.
+//
+// Retries are Inngest's, with its exponential backoff. MAX_ATTEMPTS is
+// checked inside deliverActivation too, so the row is marked FAILED on the
+// last attempt rather than only being visible in the job runner's history.
+export const sendSubscriptionConfirmation = inngest.createFunction(
+  {
+    id: "send-subscription-confirmation",
+    name: "Send Subscription Confirmation",
+    retries: MAX_ATTEMPTS - 1,
+  },
+  { event: ACTIVATION_SUBJECT_EVENT },
+  async ({ event, step }) => {
+    const notificationId = event.data?.notificationId;
+    if (!notificationId) return { skipped: "no notification id" };
+
+    // One step, deliberately. Splitting "build the email" from "send it"
+    // would let Inngest replay the send against a cached build, and the whole
+    // point of rebuilding the model at send time is that the records may have
+    // changed.
+    return step.run("deliver", () => deliverActivation(notificationId));
+  }
+);
+
+// The reconciling sweep.
+//
+// Everything above is best-effort: the trigger runs inside a webhook that can
+// be killed, and `inngest.send` can fail. This is what makes the system
+// reliable rather than merely usually-correct, and it covers both gaps:
+//
+//   a subscription that grants access with no notification row at all -- the
+//   process died between saving Razorpay's state and recording the intention;
+//
+//   a row that has sat QUEUED without being handed to a provider -- the
+//   `inngest.send` never landed, or an attempt died mid-flight.
+//
+// Hourly, because nothing here is urgent: the ordinary path delivers in
+// seconds and this exists for the cases where it did not.
+export const sweepSubscriptionNotifications = inngest.createFunction(
+  { id: "sweep-subscription-notifications", name: "Sweep Subscription Notifications", retries: 1 },
+  { cron: "17 * * * *" },
+  async ({ step }) => {
+    // Subscriptions with no row. queueActivationNotification writes the row
+    // and raises the event, exactly as the webhook would have.
+    const recovered = await step.run("queue-missing", async () => {
+      const missing = await subscriptionsMissingNotification();
+      const queued = [];
+      for (const subscription of missing) {
+        const result = await queueActivationNotification(subscription);
+        if (result.queued) queued.push(subscription.id);
+      }
+      return { found: missing.length, queued: queued.length };
+    });
+
+    // Rows that were recorded but never sent. Re-raising the event is safe:
+    // deliverActivation claims the row, so a duplicate event cannot produce a
+    // duplicate email.
+    const renotified = await step.run("requeue-stale", async () => {
+      const stale = await staleQueued();
+      for (const notification of stale) {
+        await inngest.send({
+          name: ACTIVATION_SUBJECT_EVENT,
+          data: { notificationId: notification.id },
+        });
+      }
+      return { requeued: stale.length };
+    });
+
+    if (recovered.found || renotified.requeued) {
+      // Worth a log line: in a healthy deployment both are zero, so anything
+      // else says the ordinary path is dropping notifications.
+      console.warn({
+        code: "SUBSCRIPTION_NOTIFICATIONS_SWEPT",
+        details: { ...recovered, ...renotified },
+      });
+    }
+
+    return { ...recovered, ...renotified };
+  }
+);
+
+// --- Exchange rates ---------------------------------------------------------
+
+// Keeping the rate table current.
+//
+// A job rather than a fetch in the render path, deliberately. §14 of the
+// brief: nothing on a dashboard may wait on an external FX service. So the
+// application only ever READS rates, from its own table, and this is the one
+// thing that writes them. A provider outage then degrades a converted total
+// to a slightly older one -- or, past the staleness window, to a labelled
+// one -- instead of degrading a page load.
+//
+// Four times a day against a source that publishes once: the ECB fixes around
+// 16:00 CET on working days, and the exact moment it lands is not worth
+// modelling. Refetching a day already stored upserts the same row, so extra
+// runs cost one request and change nothing.
+//
+// Also triggerable by event, which is how a fresh deployment warms the table
+// without waiting up to six hours for the first cron.
+export const refreshExchangeRates = inngest.createFunction(
+  { id: "refresh-exchange-rates", name: "Refresh Exchange Rates", retries: 2 },
+  [{ cron: "25 */6 * * *" }, { event: "currency.rates.refresh" }],
+  async ({ event, step }) => {
+    // An explicit date backfills one historical fixing; omitted, it takes the
+    // latest. Validated here rather than passed through, because this event
+    // can be raised from the Inngest dashboard.
+    const on = /^\d{4}-\d{2}-\d{2}$/.test(String(event?.data?.on ?? "")) ? event.data.on : null;
+
+    const payload = await step.run("fetch", () => fetchRates({ on }));
+
+    const stored = await step.run("store", () => putRates(payload));
+
+    return { asOf: payload.asOf, source: payload.source, stored: stored.written.length };
+  }
+);

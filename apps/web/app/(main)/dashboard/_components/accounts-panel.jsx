@@ -1,3 +1,9 @@
+"use client";
+
+// A client component, which it effectively already was: the guest demo
+// and the landing page both render it inside their own client trees.
+// Saying so explicitly is what lets it read the display currency from
+// context instead of being handed one by three different callers.
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import {
@@ -8,12 +14,18 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import CreateAccountDrawer from "@/components/create-account-drawer";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/currency-provider";
 
 // Compact list, the counterpart to the reference dashboard's wallet panel.
 // The full cards live on /accounts.
 const AccountsPanel = ({ accounts, guest = false }) => {
+  // Bound to the display currency the viewer chose. This component is
+  // shared by the signed-in dashboard, the guest demo and the landing
+  // page, and it formats correctly in all three without any of them
+  // telling it which currency to use.
+  const { format: formatCurrency } = useCurrency();
+
   const Row = guest ? "div" : Link;
   const total = accounts.reduce((sum, account) => sum + account.balance, 0);
 

@@ -9,6 +9,7 @@ import Faq from "@/components/landing/faq";
 import FinalCta from "@/components/landing/final-cta";
 import { buildStatTiles } from "@/lib/stat-tiles";
 import { getLandingStats } from "@/lib/stats";
+import { OG_IMAGE } from "@/lib/brand/identity.mjs";
 
 // The heaviest thing below the fold, split out of the initial bundle.
 //
@@ -36,15 +37,23 @@ export const metadata = {
     title: "WHealthOS — Your finances, one clear picture",
     description:
       "Accounts, transactions, budgets, goals and analytics in one place. Try the whole application on sample data without an account.",
+    // Restated here, not inherited: a page's `openGraph` replaces the root
+    // layout's rather than merging into it, so omitting this is what left the
+    // landing page -- the one URL people actually share -- with no card.
+    images: [
+      { url: `/${OG_IMAGE.path}`, width: OG_IMAGE.width, height: OG_IMAGE.height, alt: "WHealthOS" },
+    ],
   },
-  // No twitter:creator and no image. There is no WHealthOS account to name and
-  // no social card has been drawn, and inventing either is the same mistake as
-  // inventing a statistic.
+  // Still no twitter:creator: there is no WHealthOS account to name, and
+  // inventing one is the same mistake as inventing a statistic. There is now a
+  // social card, though -- the lockup on the product's own dark ground,
+  // generated from the brand identity -- so the card is the large variant.
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "WHealthOS — Your finances, one clear picture",
     description:
       "Accounts, transactions, budgets, goals and analytics in one place. Try the whole application on sample data without an account.",
+    images: [`/${OG_IMAGE.path}`],
   },
 };
 

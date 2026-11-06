@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Loader2, Search } from "lucide-react";
 import { searchEverything } from "@/actions/search";
 import { defaultCategories } from "@/data/categories";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
   defaultCategories.map((category) => [category.id, category.name])
@@ -18,6 +18,10 @@ const DEBOUNCE_MS = 250;
 const MIN_QUERY = 2;
 
 const GlobalSearch = ({ className }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DEMO_ACCOUNTS, DEMO_BUDGET, demoTransactions } from "./data";
+import { DEMO_STORAGE_KEY } from "./storage-key";
+import { DEMO_ACCOUNTS, DEMO_BUDGET, DEMO_CURRENCY, demoTransactions } from "./data";
 import { accountsWithTotals, dashboardFrom } from "./compute";
 
 // Demo mode keeps everything in the browser. Nothing a guest enters reaches
@@ -9,7 +10,7 @@ import { accountsWithTotals, dashboardFrom } from "./compute";
 // would mean a second identity path alongside Clerk, with tenant isolation no
 // longer resting solely on a verified session. For a finance app that trade is
 // not worth making for a product tour.
-export const DEMO_STORAGE_KEY = "whealth-demo-transactions";
+export { DEMO_STORAGE_KEY } from "./storage-key";
 
 // A guest who adds hundreds of rows is stress-testing, not evaluating; the cap
 // keeps localStorage from filling up.
@@ -36,6 +37,18 @@ const write = (rows) => {
 
 const byNewest = (a, b) => new Date(b.date) - new Date(a.date);
 
+/**
+ * The guest dashboard's data, in DEMO_CURRENCY.
+ *
+ * It used to be scaled here, from a rate the server resolved and passed down.
+ * That made every currency change a round trip through the demo layout --
+ * the same cost the signed-in app was paying -- and meant the sample data and
+ * the display formatting were converted in two different places.
+ *
+ * Now the data stays in the currency it is written in and CurrencyProvider
+ * converts it for display, exactly as it does for a real ledger. Switching
+ * currency here is a local state update with no server involved at all.
+ */
 export function useDemoData() {
   const [added, setAdded] = useState([]);
 
@@ -52,33 +65,48 @@ export function useDemoData() {
   const sample = useMemo(() => demoTransactions(), []);
 
   const transactions = useMemo(
-    () => [...sample, ...added].sort(byNewest),
+    () =>
+      [...sample, ...added]
+        .map((row) => ({ ...row, currency: DEMO_CURRENCY }))
+        .sort(byNewest),
     [sample, added]
   );
 
   const accounts = useMemo(
-    () => accountsWithTotals(DEMO_ACCOUNTS, transactions),
+    () =>
+      accountsWithTotals(
+        DEMO_ACCOUNTS.map((account) => ({ ...account, currency: DEMO_CURRENCY })),
+        transactions
+      ),
     [transactions]
   );
 
-  const addTransaction = useCallback((input) => {
-    const row = {
-      ...input,
-      id: `guest-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      amount: Number(input.amount),
-      date: new Date(input.date).toISOString(),
-      isRecurring: Boolean(input.isRecurring),
-      guest: true,
-    };
+  const addTransaction = useCallback(
+    (input, toLedger = (value) => value) => {
+      const row = {
+        ...input,
+        id: `guest-tx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        // Stored in DEMO_CURRENCY, not in whatever the guest is reading in.
+        // They typed the figure in the displayed currency, so the caller
+        // hands over the inverse conversion -- which is what makes switching
+        // currency later move their row alongside the sample instead of
+        // leaving one number stranded in a currency nobody is reading.
+        amount: toLedger(Number(input.amount)),
+        date: new Date(input.date).toISOString(),
+        isRecurring: Boolean(input.isRecurring),
+        guest: true,
+      };
 
-    setAdded((current) => {
-      const next = [row, ...current].slice(0, MAX_GUEST_TRANSACTIONS);
-      write(next);
-      return next;
-    });
+      setAdded((current) => {
+        const next = [row, ...current].slice(0, MAX_GUEST_TRANSACTIONS);
+        write(next);
+        return next;
+      });
 
-    return row;
-  }, []);
+      return row;
+    },
+    []
+  );
 
   const removeTransaction = useCallback((id) => {
     setAdded((current) => {

@@ -364,12 +364,31 @@ describe("xlsx workbook", () => {
 // [<50> 50 <6572> -15 <696f643a>] -- so each array's hex runs are concatenated
 // to rebuild the string. Everything asserted is drawn by the same code path
 // that produces the delivered file; only the compression differs.
+// Reads the text back out of an uncompressed PDF: find each "] TJ", take the
+// array that closes there, and decode the hex strings inside it.
+//
+// Deliberately a scan and not one pattern over the whole file. The single
+// regex this replaced -- /\[((?:\s*(?:<[0-9a-fA-F]*>|-?[\d.]+))*)\s*\]\s*TJ/ --
+// backtracks catastrophically, because `\s*` can match empty and so a run of
+// digits can be partitioned into `[\d.]+` tokens exponentially many ways. It
+// was harmless only while no other PDF array held numbers; the masthead's
+// gradient added `/C0 [0.0705882 0.4 0.929412]`, which matches the opening
+// bracket, fails at the end, and then explores 256^n partitions before giving
+// up. Every pdf test in this file hung at 100% CPU.
+//
+// An array that holds no hex strings -- any other PDF array -- yields an empty
+// line here and is skipped, so nothing needs to recognise them.
 const pdfText = (buffer) => {
   const raw = buffer.toString("latin1");
   const lines = [];
-  for (const [, array] of raw.matchAll(/\[((?:\s*(?:<[0-9a-fA-F]*>|-?[\d.]+))*)\s*\]\s*TJ/g)) {
+  const closing = /\]\s*TJ/g;
+  let match;
+  while ((match = closing.exec(raw)) !== null) {
+    // These arrays do not nest, so the nearest preceding bracket opens it.
+    const open = raw.lastIndexOf("[", match.index);
+    if (open === -1) continue;
     let line = "";
-    for (const [, hex] of array.matchAll(/<([0-9a-fA-F]*)>/g)) {
+    for (const [, hex] of raw.slice(open + 1, match.index).matchAll(/<([0-9a-fA-F]*)>/g)) {
       line += Buffer.from(hex, "hex").toString("latin1");
     }
     if (line) lines.push(line);

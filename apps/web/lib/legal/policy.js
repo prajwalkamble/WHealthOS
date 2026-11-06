@@ -89,6 +89,13 @@ export const PROCESSORS = [
     evidence: "lib/ai/gemini.js, called from actions/transaction.js, lib/inngest/functions.js and lib/ai/agent.js",
   },
   {
+    name: "Razorpay",
+    purpose:
+      "Taking payment when you buy a plan from Settings. Only reached if you open the checkout yourself -- their script is not loaded until you click a Pay button, and the Plan card does not appear at all unless this deployment has been given Razorpay credentials",
+    data: "Your email address, the amount, and which plan and billing period you chose. Separately, and directly: whatever you type into Razorpay's own checkout -- card number, UPI id or bank credentials. Those are entered on Razorpay's screen, not ours, and never reach WHealthOS",
+    evidence: "lib/payments/razorpay.js, app/api/payments/razorpay/order and /verify, components/payments/razorpay-checkout-button.jsx",
+  },
+  {
     name: "Arcjet",
     purpose: "Rate limiting, bot detection and request filtering",
     data: "Request metadata, including IP address where available, and your account identifier",

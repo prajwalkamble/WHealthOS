@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/drawer";
 import { deleteBudgetEntry } from "@/actions/budget";
 import { defaultCategories } from "@/data/categories";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import BudgetForm from "./budget-form";
 import BudgetRow from "./budget-row";
@@ -28,10 +27,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCurrency } from "@/components/currency-provider";
 
 const CATEGORY_NAME = new Map(defaultCategories.map((c) => [c.id, c.name]));
 
 const BudgetsClient = ({ data, period, options }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const { budgets, progress, period: periodInfo, totals } = data;
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -77,7 +81,7 @@ const BudgetsClient = ({ data, period, options }) => {
   const attention = useMemo(
     () => attentionItems(budgets, (b) => label(b)),
     // label is derived from the same CATEGORY_NAME map on every render.
-    [budgets] // eslint-disable-line react-hooks/exhaustive-deps
+    [budgets]
   );
 
   const setPeriod = (next) => {

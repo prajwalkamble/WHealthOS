@@ -14,12 +14,12 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { formatCurrency } from "@/lib/format";
 import { deleteGoal, setGoalStatus } from "@/actions/goals";
 import GoalCard from "./goal-card";
 import { paceOf } from "./pace";
 import GoalForm from "./goal-form";
 import ContributionDrawer from "./contribution-drawer";
+import { useCurrency } from "@/components/currency-provider";
 
 const Metric = ({ label, value, hint }) => (
   <Card>
@@ -32,6 +32,10 @@ const Metric = ({ label, value, hint }) => (
 );
 
 const GoalsClient = ({ goals }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);

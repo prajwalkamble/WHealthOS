@@ -128,7 +128,7 @@ export function AddTransactionForm ({
       reset();
       router.push(`/account/${transactionResult.data.accountId}`);
     }
-  }, [transactionResult, transactionLoading, editMode]);
+  }, [transactionResult, transactionLoading, editMode, guest, reset, router]);
 
   const handleScanComplete = (scannedData) => {
     if (scannedData) {

@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import BackToTop from "@/components/back-to-top";
@@ -11,6 +10,7 @@ import { AI_USAGE_LINK } from "@/lib/legal/ai";
 import { COOKIE_POLICY_LINK } from "@/lib/legal/cookies";
 import { SECURITY_LINK } from "@/lib/legal/security";
 import { LEGAL_LINKS } from "@/lib/legal/versions";
+import Logo from "@/components/brand/logo";
 
 // The marketing footer.
 //
@@ -167,23 +167,7 @@ const Footer = () => {
               href="/"
               className="inline-flex items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              {/* Same pairing as the header: the navy wordmark is unreadable
-                  on the dark background. Only one carries the name. */}
-              <Image
-                src="/logo.png"
-                alt="WHealthOS"
-                width={180}
-                height={60}
-                className="h-9 w-auto object-contain dark:hidden"
-              />
-              <Image
-                src="/logo-dark.png"
-                alt=""
-                aria-hidden
-                width={180}
-                height={60}
-                className="hidden h-9 w-auto object-contain dark:block"
-              />
+              <Logo id="footer" className="h-9 w-auto" />
             </Link>
 
             <p className="mt-5 text-balance text-base font-semibold leading-snug tracking-tight">

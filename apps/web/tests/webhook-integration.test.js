@@ -156,10 +156,34 @@ describe("authenticity", () => {
 
 describe("event handling", () => {
   it("acknowledges an event it does not act on, rather than erroring", async () => {
-    const { body, headers } = signed({ type: "email.delivered", created_at: "", data: {} });
+    // Resend lets an account subscribe to more events than this endpoint
+    // handles. One it does not recognise is acknowledged so the delivery
+    // stops being retried, not treated as a failure.
+    //
+    // This used to use email.delivered, which was genuinely unhandled. It is
+    // not any more: delivery outcomes are now recorded against subscription
+    // notifications, so an example is needed that really is outside both
+    // handlers.
+    const { body, headers } = signed({ type: "contact.created", created_at: "", data: {} });
     const res = await post(body, headers);
     expect(res.status).toBe(200);
-    expect((await res.json()).ignored).toBe("email.delivered");
+    expect((await res.json()).ignored).toBe("contact.created");
+    expect(sent).toHaveLength(0);
+  });
+
+  // The other half of the same property, for the branch that now does handle
+  // these: a delivery event carrying nothing this deployment sent is
+  // acknowledged rather than erroring. Most of them are -- every other email
+  // WHealthOS sends produces the same events.
+  it("acknowledges a delivery event for a message it does not track", async () => {
+    const { body, headers } = signed({
+      type: "email.delivered",
+      created_at: new Date().toISOString(),
+      data: { email_id: "re_not_one_of_ours" },
+    });
+    const res = await post(body, headers);
+    expect(res.status).toBe(200);
+    expect((await res.json()).matched).toBe(false);
     expect(sent).toHaveLength(0);
   });
 

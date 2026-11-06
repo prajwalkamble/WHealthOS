@@ -88,7 +88,7 @@ export function RetirementWithdrawalCalculator() {
               You are drawing more than your savings earn after inflation, so
               the pot is being spent down rather than living off its return.
               Drawing around {money(result.sustainableMonthly)} a month would
-              leave the balance broadly intact in today's money.
+              leave the balance broadly intact in today&rsquo;s money.
             </p>
           )}
 

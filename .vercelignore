@@ -1,0 +1,34 @@
+# What must never be uploaded to a CLI deploy.
+#
+# Vercel installs dependencies and builds on its own machines, so shipping any
+# of this is at best wasted bandwidth. Without this file the upload exceeded
+# the 100 MB per-file limit on node_modules' SWC binaries and on the webpack
+# cache under .next-build.
+#
+# .gitignore already covers most of it for git-based deploys; a CLI deploy
+# uploads the working directory, which is why it needs saying again here.
+
+node_modules
+**/node_modules
+
+# Build output, including the separate directory used to verify a build while
+# a dev server is running (NEXT_DIST_DIR=.next-build).
+.next
+**/.next
+.next-build
+**/.next-build
+
+# Local environment files. Production configuration lives in Vercel's own
+# environment variables; a .env reaching the build would be both wrong and a
+# secret leak.
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Local tooling, caches and test artefacts.
+.git
+.playwright-cli
+coverage
+*.log
+*.tsbuildinfo

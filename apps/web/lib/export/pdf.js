@@ -1,7 +1,17 @@
-import fs from "node:fs";
-import path from "node:path";
 import PDFDocument from "pdfkit";
 import { periodTotals } from "../analytics";
+import {
+  BRAND_NAME,
+  INK,
+  INK_MUTED,
+  LOCKUP,
+  MARK,
+  RAMP,
+  RULE as RULE_COLOUR,
+  WORDMARK_INK_TEXT,
+  WORDMARK_RAMP_TEXT,
+  markRamp,
+} from "../brand/identity.mjs";
 
 // PDF reporting.
 //
@@ -16,35 +26,88 @@ import { periodTotals } from "../analytics";
 // generated from the user's own records -- not a bank statement, not certified
 // and not audited -- and the footer says exactly that.
 
-// The brand's own colours, sampled from public/logo.png rather than invented:
-// the navy of the wordmark and the blue of the chart mark.
-const NAVY = "#15173D";
-const BLUE = "#0D89C9";
-const RULE = "#D9DCE5";
-const MUTED = "#5B6071";
+// The brand's colours, read from lib/brand/identity.mjs rather than restated
+// here. The previous values were sampled from public/logo.png -- a navy and a
+// cyan that belonged to the old raster logo and to nothing else in the app.
+const RULE = RULE_COLOUR;
+const MUTED = INK_MUTED;
 
 const PAGE = { size: "A4", margins: { top: 48, bottom: 56, left: 48, right: 48 } };
 
-// The real wordmark, read once as a Buffer rather than handed to pdfkit as a
-// path. `public/` is served by Next, not resolvable from the server bundle, and
-// cwd differs between `next dev`, `next start` and a standalone build -- so the
-// candidates are tried in order and the result is cached. A Buffer also means
-// the file is read once per process instead of once per generated page.
-const LOGO = (() => {
-  const candidates = [
-    path.join(process.cwd(), "public", "logo.png"),
-    path.join(process.cwd(), "apps", "web", "public", "logo.png"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      return fs.readFileSync(candidate);
-    } catch {
-      // Try the next one.
-    }
-  }
-  // Not fatal: drawHeader falls back to the wordmark set in type.
-  return null;
-})();
+// The wordmark's face in a PDF.
+//
+// Not Geist. pdfkit can only set type in a font it has embedded, and embedding
+// a variable-weight subset for eight characters costs more than it is worth in
+// a document that is mostly a table. Helvetica-Bold is one of the fourteen
+// standard fonts every PDF reader already has, and at the lockup's tracking it
+// is a close enough stand-in. The mark beside it is the real geometry, which
+// is the part that carries the brand.
+const WORDMARK_FONT = "Helvetica-Bold";
+
+// The lockup, drawn as vector.
+//
+// Nothing is rasterised: the same path, gradient and metrics the browser
+// renders are re-drawn here with pdfkit's own primitives, so the logo in an
+// exported statement is resolution-independent and changes with the identity
+// file like every other surface. This replaced reading public/logo.png off
+// disk, which embedded the old brand at a fixed 890x460 and depended on cwd
+// resolving differently under `next dev`, `next start` and a standalone build.
+//
+// Draws with the lockup's top-left at (x, y), `height` points tall, and
+// returns the width it occupied so the caller can place what follows.
+function drawLockup(doc, x, y, height) {
+  const { viewBox, mark, word } = LOCKUP;
+  const scale = height / viewBox.height;
+
+  doc.save();
+  // Maps the lockup's own coordinate system onto the page, exactly as a
+  // viewBox does in SVG. Everything below is in lockup units.
+  doc.translate(x, y).scale(scale).translate(-viewBox.x, -viewBox.y);
+
+  doc.save();
+  doc.translate(mark.x, mark.y).scale(mark.scale);
+  // Built here, inside the mark's own space, rather than in lockup space and
+  // used through a transform: a gradient's coordinates mean whatever the
+  // matrix in force says they mean, and spanning the W is the whole point.
+  const span = markRamp(MARK.ink);
+  const paint = doc.linearGradient(span.x1, span.y1, span.x2, span.y2);
+  for (const stop of RAMP) paint.stop(stop.offset, stop.color);
+  // The letter, then the arrowhead that ends its final stroke. One paint
+  // across both, so the ramp runs unbroken into the point of the arrow.
+  doc.path(MARK.path).lineWidth(MARK.stroke).lineJoin("round").lineCap("round").stroke(paint);
+  doc.path(MARK.arrowhead).fill(paint);
+  doc.restore();
+
+  // "Health" in ink, "OS" in the ramp -- the same split the screen and the
+  // email raster use. Set in two runs because a PDF text run carries one
+  // fill; the second starts exactly where the first measured out to, so the
+  // join is as tight as a single string would be.
+  doc.font(WORDMARK_FONT).fontSize(word.size);
+  const options = {
+    // y is the baseline, matching the <text y> of the SVG. Without this
+    // pdfkit treats y as the top of the line box and the type sits low.
+    baseline: "alphabetic",
+    characterSpacing: word.tracking,
+    lineBreak: false,
+  };
+  // Measured rather than assumed: Helvetica-Bold sets this wider than Geist
+  // does, so the lockup is wider than its SVG viewBox and the caller must be
+  // told the real figure or the title beside it collides.
+  const measure = (text) => doc.widthOfString(text, { characterSpacing: word.tracking });
+  const inkWidth = measure(WORDMARK_INK_TEXT);
+  const rampWidth = measure(WORDMARK_RAMP_TEXT);
+
+  doc.fillColor(INK).text(WORDMARK_INK_TEXT, word.x, word.baseline, options);
+
+  const osX = word.x + inkWidth;
+  const osPaint = doc.linearGradient(osX, 0, osX + rampWidth, 0);
+  for (const stop of RAMP) osPaint.stop(stop.offset, stop.color);
+  doc.fillColor(osPaint).text(WORDMARK_RAMP_TEXT, osX, word.baseline, options);
+
+  doc.restore();
+
+  return (word.x + inkWidth + rampWidth - viewBox.x) * scale;
+}
 
 // Amounts carry no currency symbol.
 //
@@ -99,25 +162,9 @@ function drawHeader(doc, { title, range, generatedAt }) {
   const right = doc.page.width - PAGE.margins.right;
   let x = PAGE.margins.left;
 
-  // logo.png already contains the wordmark, so setting "WHealthOS" beside it
-  // would print the name twice. The typeset wordmark is the fallback for when
-  // the asset could not be read, not a companion to it.
-  let drawn = false;
-  if (LOGO) {
-    try {
-      doc.image(LOGO, x, top - 2, { height: 24 });
-      // 890x460 at 24pt tall is ~46pt wide; the gap after it is deliberate.
-      x += 62;
-      drawn = true;
-    } catch {
-      // A report that renders without its logo is still a usable report; one
-      // that throws is not.
-    }
-  }
-  if (!drawn) {
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(16).text("WHealthOS", x, top);
-    x += 90;
-  }
+  // 22pt tall, the same optical size the lockup has in the application header.
+  // The lockup already sets the name, so nothing types "WHealthOS" beside it.
+  x += drawLockup(doc, x, top - 2, 22) + 14;
 
   doc
     .fillColor(MUTED)
@@ -137,8 +184,13 @@ function drawHeader(doc, { title, range, generatedAt }) {
       align: "right",
     });
 
+  // The rule under the masthead carries the brand ramp across the page, left
+  // to right, which is the one place a gradient earns its keep in a document
+  // that is otherwise deliberately monochrome and print-first.
   const ruleY = top + 40;
-  doc.moveTo(PAGE.margins.left, ruleY).lineTo(right, ruleY).strokeColor(BLUE).lineWidth(1.5).stroke();
+  const ramp = doc.linearGradient(PAGE.margins.left, ruleY, right, ruleY);
+  for (const stop of RAMP) ramp.stop(stop.offset, stop.color);
+  doc.moveTo(PAGE.margins.left, ruleY).lineTo(right, ruleY).lineWidth(1.5).stroke(ramp);
   return ruleY + 18;
 }
 
@@ -163,7 +215,7 @@ function drawSummary(doc, rows, y) {
   cells.forEach(([label, value], i) => {
     const x = PAGE.margins.left + i * width;
     doc.fillColor(MUTED).font("Helvetica").fontSize(8).text(label.toUpperCase(), x, y);
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(12).text(value, x, y + 12, {
+    doc.fillColor(INK).font("Helvetica-Bold").fontSize(12).text(value, x, y + 12, {
       width: width - 8,
     });
   });
@@ -185,7 +237,7 @@ function drawSummary(doc, rows, y) {
 
 function drawTableHeader(doc, y) {
   let x = PAGE.margins.left;
-  doc.font("Helvetica-Bold").fontSize(7.5).fillColor(NAVY);
+  doc.font("Helvetica-Bold").fontSize(7.5).fillColor(INK);
   for (const col of COLUMNS) {
     doc.text(col.label.toUpperCase(), x, y, { width: col.width, align: col.align ?? "left" });
     x += col.width;
@@ -223,7 +275,7 @@ function drawTotals(doc, rows, y, bottom, header) {
   doc
     .moveTo(PAGE.margins.left, y)
     .lineTo(right, y)
-    .strokeColor(NAVY)
+    .strokeColor(INK)
     .lineWidth(0.75)
     .stroke();
 
@@ -240,7 +292,7 @@ function drawTotals(doc, rows, y, bottom, header) {
   };
   for (const col of COLUMNS) {
     doc
-      .fillColor(NAVY)
+      .fillColor(INK)
       .font("Helvetica-Bold")
       .fontSize(9)
       .text(cells[col.key], x, y, { width: col.width - 6, align: col.align ?? "left" });
@@ -279,7 +331,23 @@ export function transactionStatement({
   compress = true,
 }) {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ ...PAGE, autoFirstPage: false, bufferPages: true, compress });
+    const doc = new PDFDocument({
+      ...PAGE,
+      autoFirstPage: false,
+      bufferPages: true,
+      compress,
+      // The brand in the file's own properties, not just on the page. The
+      // masthead draws the W rather than typing it, so a reader searching the
+      // text layer for the product name would otherwise find it only in the
+      // footer; this is what a PDF viewer shows in its title bar and what a
+      // document manager indexes.
+      info: {
+        Title: `${BRAND_NAME} ${title}`,
+        Author: BRAND_NAME,
+        Creator: BRAND_NAME,
+        Producer: BRAND_NAME,
+      },
+    });
     const chunks = [];
     doc.on("data", (chunk) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -325,7 +393,7 @@ export function transactionStatement({
       let x = PAGE.margins.left;
       for (const col of COLUMNS) {
         doc
-          .fillColor(NAVY)
+          .fillColor(INK)
           .font("Helvetica")
           .fontSize(8.5)
           .text(String(cells[col.key]), x, y, {

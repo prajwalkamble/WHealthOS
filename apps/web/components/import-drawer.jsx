@@ -33,9 +33,9 @@ import {
 } from "./ui/select";
 import { analyzeImport, importTransactions } from "@/actions/import";
 import { MAPPABLE_FIELDS } from "@/lib/import/transactions";
-import { formatCurrency } from "@/lib/format";
 import { dateCell } from "@/lib/export/csv";
 import { APP_TIME_ZONE } from "@/lib/time";
+import { useCurrency } from "@/components/currency-provider";
 
 // The import flow.
 //
@@ -586,6 +586,10 @@ function AccountMapping({ names, accounts, onChange }) {
 }
 
 function PreviewTable({ rows, accounts, total }) {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const nameOf = (id) => accounts.find((a) => a.id === id)?.name ?? "—";
 
   return (

@@ -40,6 +40,18 @@ model User {
   // Every legal document acceptance this person has given. See
   // apps/web/lib/legal/versions.js for what the version strings mean.
   legalConsents LegalConsent[]
+  // Billing. A user has at most one live subscription at a time -- enforced by
+  // a partial unique index in the migration, not by this relation -- and keeps
+  // the history of the ones that ended.
+  subscriptions Subscription[]
+  // Checkout attempts: the record that a purchase was started, written before
+  // Razorpay is called so a retry can find it. Kept after the fact as the
+  // audit trail of what was tried.
+  checkoutAttempts CheckoutAttempt[]
+  // Subscription emails this person has been sent, or is owed. One row per
+  // qualifying event, and the unique key on it is what makes "exactly one
+  // confirmation per activation" a database guarantee rather than a hope.
+  subscriptionNotifications SubscriptionNotification[]
   // Light / dark / system, chosen in the app and kept on the account so the
   // choice follows the user to another browser or device.
   // Appearance settings from lib/preferences.js (theme colour, chart colours,
@@ -52,6 +64,17 @@ model User {
   // still goes out, with the same real totals and no commentary section.
   // Defaults to true, which is what every existing account already had.
   monthlyInsights Boolean    @default(true)
+  // The currency this person reads their figures in. A DISPLAY choice, not a
+  // statement about any account: changing it reformats and converts what is
+  // shown and rewrites nothing. Null means never chosen, in which case the
+  // country the request came from decides -- see lib/currency/resolve.js.
+  //
+  // Its own column rather than a key in `preferences`, for two reasons. It is
+  // read on the server for the first paint, where parsing a JSON blob to find
+  // one string is wasteful; and `preferences` is gated behind the paid
+  // appearance entitlement, while reading your own money in your own currency
+  // is not something to charge for.
+  displayCurrency String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -63,6 +86,10 @@ model Account {
   name         String
   type         AccountType
   balance      Decimal       @default(0) // will ask inital balance while creating an account
+  // ISO 4217, from lib/currency/registry.js. The currency this amount is
+  // actually in -- never the currency the viewer has chosen to read in.
+  // See the migration for why every existing row is INR.
+  currency     String        @default("INR")
   isDefault    Boolean       @default(false)
   userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -86,6 +113,13 @@ model Transaction {
   id                String             @id @default(uuid())
   type              TransactionType
   amount            Decimal
+  // ISO 4217, from lib/currency/registry.js. The currency this amount is
+  // actually in -- never the currency the viewer has chosen to read in.
+  // See the migration for why every existing row is INR.
+  // Copied from the account at the time it was written, and never updated
+  // afterwards: what a transaction was in is a historical fact, and moving
+  // an account to another currency must not rewrite its past.
+  currency          String             @default("INR")
   description       String?
   date              DateTime
   category          String
@@ -138,6 +172,12 @@ enum TransactionStatus {
 model Budget {
   id            String    @id @default(uuid())
   amount        Decimal
+  // ISO 4217, from lib/currency/registry.js. The currency this amount is
+  // actually in -- never the currency the viewer has chosen to read in.
+  // See the migration for why every existing row is INR.
+  // A budget belongs to the person, not to an account, so it carries its own
+  // currency rather than inheriting one.
+  currency      String    @default("INR")
   // Null means the overall monthly budget. Otherwise a transaction category.
   category      String?
   lastAlertSent DateTime? // Track when the last alert was sent
@@ -170,6 +210,13 @@ model Card {
   expiryYear  Int
   // Credit cards only; null on a debit card, which has no limit of its own.
   creditLimit Decimal?
+  // ISO 4217, from lib/currency/registry.js. The currency this amount is
+  // actually in -- never the currency the viewer has chosen to read in.
+  // See the migration for why every existing row is INR.
+  // Its own column rather than read through `account`: accountId is nullable
+  // and is set to null when an account is deleted, so a derived currency
+  // would vanish -- or silently change -- at exactly the wrong moment.
+  currency    String      @default("INR")
   // Day of the month, 1-31. Null when the user has not recorded it.
   billingDay  Int?
   dueDay      Int?
@@ -220,6 +267,13 @@ model Goal {
   name         String
   description  String?
   targetAmount Decimal
+  // ISO 4217, from lib/currency/registry.js. The currency this amount is
+  // actually in -- never the currency the viewer has chosen to read in.
+  // See the migration for why every existing row is INR.
+  // Contributions do not carry one: a contribution always belongs to exactly
+  // one goal and is counted towards that goal's target, so a second currency
+  // on it could only ever disagree with this one.
+  currency     String             @default("INR")
   // Optional: not every objective has a deadline.
   targetDate   DateTime?
   status       GoalStatus         @default(ACTIVE)
@@ -363,4 +417,433 @@ enum InboundEmailStatus {
   RECEIVED
   FORWARDED
   FAILED
+}
+
+// --- Billing ----------------------------------------------------------------
+//
+// Three tables: what someone is subscribed to, what they were charged, and
+// what the payment provider told us. They are deliberately separate.
+//
+// None of them is tenant-writable. A person may READ their own subscription
+// and payments; only the job-runner role may write any of it, which is the
+// role the webhook and the checkout service run as. The same reasoning as
+// legal_consents: a billing record a tenant could write is not evidence of
+// anything. See the migration for the policies.
+
+model Subscription {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Our own plan identifier, from data/pricing.js -- "pro" or "intelligent".
+  // Never the provider's. Entitlements are resolved from this, so a provider
+  // changing its plan ids cannot change what someone can do.
+  planId   String
+  interval BillingInterval
+
+  // Which gateway this went through. One today; the column exists so adding a
+  // second does not mean a migration and a rewrite of every query.
+  provider PaymentProvider @default(RAZORPAY)
+
+  // The provider's own identifiers. The subscription id is unique because it
+  // is what a webhook arrives carrying, and two rows claiming the same one
+  // would make "whose subscription is this" ambiguous at exactly the wrong
+  // moment.
+  providerSubscriptionId String  @unique
+  providerCustomerId     String?
+  // The provider plan id this was opened against, kept for reconciliation.
+  providerPlanId         String?
+
+  // Normalised from the provider's own vocabulary by lib/billing/status.js.
+  status SubscriptionStatus @default(PENDING)
+
+  // Minor units (paise), as the provider works in. Never a float, and never
+  // used to decide entitlements -- it is a record of what was charged.
+  amount   Int
+  currency String @default("INR")
+
+  // The period that has been paid for. currentEnd is the paid-through date and
+  // is the authority for access after a subscription stops being active: you
+  // keep what you paid for, and nothing beyond it.
+  currentStart DateTime?
+  currentEnd   DateTime?
+
+  // Set when the person asked to stop but the period they paid for has not
+  // ended. Access continues until currentEnd.
+  cancelAtPeriodEnd Boolean   @default(false)
+  cancelledAt       DateTime?
+  endedAt           DateTime?
+
+  // The provider timestamp of the most recent event applied to this row.
+  // A webhook older than this is stale -- deliveries arrive out of order and
+  // are retried for days -- and is recorded without being applied.
+  lastEventAt DateTime?
+
+  payments Payment[]
+  notifications SubscriptionNotification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+
+// An attempt to buy something: written BEFORE Razorpay is called.
+//
+// This is what makes checkout idempotent, and it exists because the obvious
+// ordering is wrong. Creating the provider's subscription first and recording
+// it afterwards means a timeout, a crash or a lost race leaves a subscription
+// at Razorpay that nothing here knows about -- and the retry that follows
+// creates a second one. The row below is the thing a retry finds.
+//
+// It is also why a dismissed checkout no longer blocks the next one. The
+// one-live-per-user slot on subscriptions is for subscriptions that exist at
+// the provider in some paid-for sense; an abandoned attempt occupies nothing
+// once it is marked ABANDONED, so somebody who closed the payment window can
+// immediately choose a different plan.
+model CheckoutAttempt {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // What was asked for, and what it was priced at when it was asked for.
+  // The snapshot is a record, not an authority: the amount charged is the one
+  // on Razorpay's Plan, and the entitlement comes from planId on the
+  // subscription this attempt turns into.
+  planId         String
+  interval       BillingInterval
+  provider       PaymentProvider @default(RAZORPAY)
+  providerPlanId String
+  amount         Int
+  currency       String          @default("INR")
+
+  // Ours, and unique. Sent to Razorpay in the subscription's notes, which is
+  // how an orphaned subscription is recognised as belonging to this attempt
+  // when reconciling after a timeout.
+  idempotencyKey String @unique
+
+  // Filled in once Razorpay has answered. Unique because two attempts
+  // claiming the same provider subscription would make "which purchase is
+  // this" ambiguous.
+  providerSubscriptionId String? @unique
+
+  status CheckoutAttemptStatus @default(OPEN)
+
+  // A short classification, never a provider payload and never a secret.
+  failureCode String?
+
+  // After this, the attempt is not reused: the payment window is long gone
+  // and the person is starting again rather than continuing.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("checkout_attempts")
+}
+
+model Payment {
+  id             String       @id @default(uuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  provider           PaymentProvider @default(RAZORPAY)
+  providerPaymentId  String          @unique
+  // The provider's invoice for this charge, where the event carried one.
+  providerInvoiceId  String?
+
+  // Minor units. Integer, because money in a currency's smallest unit is a
+  // count and never a fraction of one.
+  amount   Int
+  currency String @default("INR")
+  status   PaymentStatus
+
+  // The billing period this charge covers, copied from the subscription at the
+  // time so a later renewal does not rewrite what an old charge was for.
+  periodStart DateTime?
+  periodEnd   DateTime?
+
+  paidAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([subscriptionId])
+  @@map("payments")
+}
+
+// Every webhook delivery we accepted the signature of.
+//
+// Written before the event is applied and updated after, so a delivery that
+// crashed halfway is visible as RECEIVED rather than disappearing. The unique
+// provider event id is what makes processing idempotent: a retry loses the
+// insert and is answered 200 without being applied twice.
+//
+// Not linked to a User. A webhook arrives from the provider about a
+// subscription, and resolving that to a person is the processing step's job --
+// doing it in the schema would mean a delivery for an unknown subscription had
+// nowhere to be recorded, which is precisely the delivery worth keeping.
+model BillingEvent {
+  id       String          @id @default(uuid())
+  provider PaymentProvider @default(RAZORPAY)
+
+  // The provider's delivery identifier. Razorpay sends x-razorpay-event-id.
+  providerEventId String @unique
+  eventType       String
+
+  status BillingEventStatus @default(RECEIVED)
+
+  // Resource identifiers from the payload, for looking a delivery up later.
+  // Not the payload itself: it carries contact details and card metadata that
+  // nothing here needs.
+  providerSubscriptionId String?
+  providerPaymentId      String?
+
+  // Why it was not applied, when it was not. A short reason, never a payload
+  // and never a secret.
+  note String?
+
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([providerSubscriptionId])
+  @@index([receivedAt(sort: Desc)])
+  @@map("billing_events")
+}
+
+enum PaymentProvider {
+  RAZORPAY
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+// Normalised subscription state. The provider's own vocabulary is mapped onto
+// this in lib/billing/status.js, which is the only place that knows both.
+enum SubscriptionStatus {
+  // Created or authenticated, but never charged. No paid access.
+  PENDING
+  // Charged and running.
+  ACTIVE
+  // A charge failed and the provider is retrying, or has stopped retrying.
+  // Access continues only to the end of the period already paid for.
+  PAST_DUE
+  // Still active, but will not renew. Access continues to currentEnd.
+  CANCEL_SCHEDULED
+  CANCELLED
+  // Ran to the end of its agreed cycles.
+  COMPLETED
+  EXPIRED
+  PAUSED
+}
+
+
+// Where an attempt got to. Only OPEN and CREATED are in flight; the other
+// three are terminal and free the slot for another attempt.
+enum CheckoutAttemptStatus {
+  // The row exists; Razorpay has not been called yet, or the call did not
+  // come back. This is the state a reconciling retry has to resolve.
+  OPEN
+  // Razorpay has a subscription for it. The payment window can be opened, and
+  // reopened, against the same one.
+  CREATED
+  // A payment was verified against it.
+  COMPLETED
+  // Superseded, expired, or the person chose something else.
+  ABANDONED
+  // Razorpay refused, or something here did.
+  FAILED
+}
+
+enum PaymentStatus {
+  CAPTURED
+  AUTHORIZED
+  FAILED
+  REFUNDED
+}
+
+enum BillingEventStatus {
+  RECEIVED
+  PROCESSED
+  // Understood, deliberately not applied: a stale event, or one about a
+  // subscription this deployment does not know.
+  IGNORED
+  FAILED
+}
+
+
+// --- Subscription notifications ---------------------------------------------
+
+// One row per subscription email that is owed, has been sent, or was
+// deliberately not sent.
+//
+// This is a transactional outbox, and it exists for one reason: an email is
+// the only part of activating a subscription that talks to a third party, and
+// it is the part most likely to fail. Payment verification, the subscription
+// row and the entitlement all succeed or fail together inside this
+// deployment; Resend can be down for an hour. So the intention to send is
+// written here first, as a fact in the same database as the subscription, and
+// the sending is a separate job that may be retried for as long as it takes.
+//
+// A crash between activation and delivery therefore loses nothing: the row
+// says an email is owed. And a reconciling sweep goes further and looks for
+// subscriptions that grant access with no row at all, so even a crash BEFORE
+// the row was written is recovered.
+//
+// What it deliberately does not have:
+//
+//   No workspaceId. There are no workspaces in WHealthOS -- no workspace,
+//   membership or role table exists anywhere in this schema -- so a column
+//   for one would be a column that is always null, and every query past it
+//   would be written against a concept the product does not have.
+//
+//   No message body. The email is rendered from the subscription, the payment
+//   and the plan registry at send time. Storing a copy would be a second
+//   source of truth for what somebody was charged.
+model SubscriptionNotification {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  event NotificationEvent
+
+  // The exactly-once key. Derived from the subscription and the event, so
+  // every retry, every replayed webhook and every concurrent sync computes
+  // the same string -- and the unique index makes the second writer lose.
+  // Nothing in the application counts rows or checks "have we sent this
+  // already" in application code, because that check cannot be made safe
+  // under concurrency and this one is made by Postgres.
+  idempotencyKey String @unique
+
+  // Where it was sent, as resolved from the account at the time. Null on a
+  // row that was never going to be sent -- an account with no email address,
+  // or a subscription that predates this table.
+  recipientEmail String?
+
+  status NotificationStatus @default(QUEUED)
+
+  // Resend's id for the message. Unique, because it is how a delivery
+  // webhook finds the row it is about, and two rows claiming one message
+  // would make that ambiguous. Null until a provider has accepted it.
+  providerMessageId String? @unique
+
+  // How many times sending has been attempted. Inngest owns the backoff; this
+  // is what makes a permanently failing notification visible without reading
+  // the job runner's history.
+  attempts Int @default(0)
+
+  // Why the last attempt failed. Our own short reason, never a provider
+  // payload, never a credential, and never the message body.
+  lastError String?
+
+  // The lifecycle, kept as separate timestamps rather than one "updated"
+  // column, because the gap between accepted and delivered is the thing
+  // worth being able to see.
+  queuedAt    DateTime  @default(now())
+  acceptedAt  DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([subscriptionId])
+  @@map("subscription_notifications")
+}
+
+// The subscription events that can produce an email.
+//
+// One member today. The enum exists so that adding renewal, payment failure
+// or cancellation mail is a new member and a new template, not a second
+// notification system -- the outbox, the idempotency key, the retry and the
+// delivery tracking are already event-agnostic.
+enum NotificationEvent {
+  SUBSCRIPTION_ACTIVATED
+}
+
+// How far a notification has got.
+//
+// ACCEPTED is deliberately not called SENT. An id back from Resend means
+// Resend took responsibility for the message; it is not evidence that
+// anybody received it. Those are different facts and the provider reports
+// them through different webhook events, so they are different states here.
+enum NotificationStatus {
+  // Owed. Written at activation, before anything is handed to a provider.
+  QUEUED
+  // The provider accepted it and gave us a message id. NOT delivered.
+  ACCEPTED
+  // The provider says it reached the mailbox.
+  DELIVERED
+  // The provider is still trying. Not terminal.
+  DELAYED
+  // Rejected by the receiving server. Terminal, and not retried: sending the
+  // same message to the same address again produces the same bounce.
+  BOUNCED
+  // Marked as spam by the recipient. Terminal.
+  COMPLAINED
+  // Retries exhausted, or refused before sending. Terminal and visible.
+  FAILED
+  // Never going to be sent, on purpose: no email address on the account, or
+  // a subscription that was already live before this table existed.
+  SKIPPED
+}
+
+// --- Exchange rates ---------------------------------------------------------
+
+// Rates fetched from an external provider, kept so that nothing in the
+// application ever has to invent one.
+//
+// Reference data, not anybody's data: one row serves every user, and no row
+// belongs to a tenant. The job runner writes; everyone reads.
+//
+// Why rows rather than a cache: a conversion shown on a dashboard has to be
+// reproducible later. Keyed by the date the rate is FOR, any figure this
+// application has ever displayed can be recomputed exactly, which is what
+// makes a converted total defensible without storing a snapshot of every
+// render.
+//
+// These are INDICATIVE rates -- European Central Bank reference rates, not a
+// dealing price and not what a bank would settle at. Anything showing a
+// converted figure has to say so.
+model ExchangeRate {
+  id String @id @default(uuid())
+
+  // ISO 4217, both of them. rate is how many `quote` units one `base` buys.
+  base  String
+  quote String
+
+  // Explicit precision: a rate is not money and the default money scale is
+  // wrong for it. Twelve decimal places holds JPY and KRW pairs, where the
+  // interesting digits are a long way right of the point.
+  rate Decimal @db.Decimal(24, 12)
+
+  // Which provider said so. Two providers disagreeing is normal, and knowing
+  // which one a figure came from is how that gets explained.
+  source String
+
+  // The date the rate is FOR, as the provider dated it. ECB publishes once
+  // per working day, so this is a date and not a timestamp -- and it is what
+  // makes a historical conversion reproducible.
+  asOf DateTime @db.Date
+
+  // When we actually retrieved it. Different from asOf whenever the provider
+  // is behind, over a weekend, or we are backfilling.
+  fetchedAt DateTime @default(now())
+
+  // One rate per pair per day per provider. A refetch updates the row rather
+  // than appending a second opinion.
+  @@unique([base, quote, asOf, source])
+  @@index([base, quote, asOf(sort: Desc)])
+  @@map("exchange_rates")
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import ThemeToggle from "@/components/theme-toggle";
+import CurrencySelector from "@/components/currency-selector";
 
 // The demo shell's top bar: a standing reminder that none of this is real,
 // and the one action that matters -- creating an account.
@@ -33,6 +34,10 @@ const DemoHeader = ({ onReset, addedCount = 0 }) => {
       </p>
 
       <div className="ml-auto flex items-center gap-1">
+        {/* The guest dashboard's whole point is that it is not an Indian
+            product with the symbols swapped: a visitor placed in Tokyo opens
+            this in yen, and anyone can change it here without an account. */}
+        <CurrencySelector />
         {/* Only offered once there is something of the guest's own to clear,
             so the control is not a puzzle on a fresh visit. */}
         {addedCount > 0 && (

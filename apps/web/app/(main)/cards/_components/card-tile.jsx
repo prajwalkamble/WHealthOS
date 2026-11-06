@@ -11,8 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/currency-provider";
 
 const NETWORK_LABEL = {
   VISA: "Visa",
@@ -35,6 +35,10 @@ const isExpired = (month, year) => {
 };
 
 const CardTile = ({ card, onEdit, onArchive, onDelete }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const archived = card.status === "ARCHIVED";
   const expired = isExpired(card.expiryMonth, card.expiryYear);
 

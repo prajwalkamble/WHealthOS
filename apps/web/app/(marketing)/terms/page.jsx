@@ -14,10 +14,13 @@ export const metadata = {
 
 // The terms of service.
 //
-// Written against what WHealthOS actually is today: one free service, no
-// payments, no plan tiers, Apache-licensed code, two AI features. Clauses that
-// would describe a billing lifecycle, a refund window or a subscription
-// renewal are absent because none of those exist — a contract about a product
+// Written against what WHealthOS actually is today: one free service, no plan
+// tiers, Apache-licensed code, two AI features — and, since 2026-10-23, a
+// payment checkout that now sells them: as of 2026-11-01 the plan on an
+// account decides what it can do, so section 6 describes renewal,
+// cancellation and the absence of proration as real terms about a real
+// agreement. What it still must not describe is the advertised per-day
+// transaction cap, which nothing enforces — a contract about a product
 // nobody built is worse than no contract.
 //
 // Server-rendered with no client JavaScript, like the privacy policy.
@@ -156,23 +159,62 @@ export default function TermsPage() {
           </Section>
 
           <Section id="plans" number="6" title="Plans and payment">
-            {/* The most important honest statement in this document. The
-                pricing page advertises paid tiers; none of them can be bought,
-                and none is enforced. Describing a billing lifecycle here would
-                be describing a product that does not exist. */}
+            {/* Rewritten 2026-11-01, with a version bump, when
+                BILLING_ENFORCEMENT was switched on.
+
+                The previous text said WHealthOS was free, that no paid
+                feature was held back, and that paying unlocked nothing. It
+                also promised new terms BEFORE any limit was applied. This is
+                that change, and it has to be as plain about what is now
+                withheld as the old text was about nothing being withheld.
+
+                One thing it must NOT claim: the per-day transaction cap on
+                the pricing page is advertised and not enforced. See
+                perDayTransactionLimitEnforced in lib/legal/terms.js. */}
             <Callout>
-              <strong>WHealthOS is free, and we cannot currently take
-              payment.</strong> Our pricing page describes paid plans, but they
-              are not available yet: there is no checkout, no payment processor
-              connected, and no plan limits enforced in the product. Everyone
-              uses the same free service.
+              <strong>
+                WHealthOS has a free plan and two paid plans, and the
+                difference between them is now applied to your account.
+              </strong>{" "}
+              Until {TERMS.version} every account received every feature
+              regardless of payment. That is no longer the case, and this
+              version of these terms is the notice of it.
             </Callout>
             <P>
-              Because nothing is sold, there is nothing here about billing
-              cycles, automatic renewal, refunds or cancellation of a paid plan.
-              If and when paid plans launch, we will set out those terms before
-              you can subscribe, and they will not apply retrospectively to your
-              use of the free service.
+              The free plan remains free, needs no card, and keeps the core of
+              the product: your accounts, transactions, cards, the dashboard
+              and the financial overview. The paid plans add budgets, goals,
+              analytics, data export and the AI features. The pricing page
+              lists exactly which feature belongs to which plan, and that
+              table is the same one the application checks against &mdash; it
+              is not a separate marketing description of it.
+            </P>
+            <P>
+              Payment is taken by <Fact value={TERMS.paymentProcessor} />.
+              Card and UPI details are entered on their screen and never reach
+              WHealthOS.{" "}
+              <strong>
+                Paying creates a recurring subscription, and you will be
+                charged again each period until you cancel.
+              </strong>{" "}
+              It renews automatically at the interval you chose &mdash;
+              monthly or yearly &mdash; at the price shown before you paid.
+            </P>
+            <P>
+              You can cancel at any time from Settings. The subscription then
+              runs to the end of the period you have already paid for and does
+              not renew, and the paid features remain available until it ends.
+              Changing between plans also takes effect at the end of the
+              current period, so you are never charged twice over for the same
+              month and never owed a part-period refund. We do not calculate
+              proration.
+            </P>
+            <P>
+              If a payment is taken and the features it buys do not become
+              available to you, that is our mistake and not yours: tell us, and
+              we will refund it in full. If we ever move a feature out of the
+              free plan that you were already using, we will tell you before we
+              do it, in a new version of these terms, as we have done here.
             </P>
           </Section>
 
@@ -282,7 +324,7 @@ export default function TermsPage() {
               completely: upload nothing and no image ever leaves WHealthOS.
               The monthly summary is not like that. It is produced for every
               account that has an email address, and writing the commentary
-              sends that month's income, expenditure and per-category totals to
+              sends that month&rsquo;s income, expenditure and per-category totals to
               Google. It is on by default, and you can turn it off in Settings,
               under Privacy: the report still reaches you with the same figures
               and no commentary, and nothing is sent to Google. If you would

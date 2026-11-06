@@ -45,7 +45,11 @@ const LegalLink = ({ href, children }) => (
 const CHECKBOX_ID = "legal-consent";
 const ERROR_ID = "legal-consent-error";
 
-const ConsentForm = () => {
+// `next` is where to go once the account exists -- the plan somebody picked
+// on /pricing before they had an account to attach it to. Validated on the
+// server before it reaches here (lib/safe-redirect.js); the default is the
+// dashboard, which is where signing up has always ended.
+const ConsentForm = ({ next = "/dashboard" }) => {
   const router = useRouter();
   const [accepted, setAccepted] = useState(false);
   // Only shown after an attempt, so the page does not open already telling
@@ -76,7 +80,7 @@ const ConsentForm = () => {
     // refresh() before the push, so the layout re-reads the account that now
     // exists instead of serving the cached render that sent us here.
     router.refresh();
-    router.push("/dashboard");
+    router.push(next);
   };
 
   return (

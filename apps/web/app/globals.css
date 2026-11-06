@@ -10,6 +10,24 @@
   :root,
   .theme-light {
     color-scheme: light;
+    /* The wordmark's ink. components/brand/logo.jsx paints "Health" from
+       this, so one element serves both themes -- the alternative was two
+       <text> nodes toggled with `dark:`, which ships the brand name twice to
+       a screen reader. Deep navy on light, near-white on dark. It lives with
+       the theme tokens rather than in the identity module because it is the
+       one brand value that has to change with the page around it. */
+    --brand-ink: #101832;
+    /* The brand ramp, blue -> purple, left to right. The mark and the "OS"
+       of the wordmark are both painted from these; the dark theme swaps them
+       for a lifted set, because this one falls to 2.8:1 on a dark ground. */
+    --brand-ramp-0: #1266ED;
+    --brand-ramp-1: #2453E8;
+    --brand-ramp-2: #493BEA;
+    --brand-ramp-3: #7228EA;
+    --brand-ramp-4: #851FEA;
+    /* The middle of the ramp, as one flat colour, for the places that
+       cannot take a gradient. See the print rule at the end of this file. */
+    --brand-ramp-solid: #493BEA;
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -49,6 +67,16 @@
   }
   .dark {
     color-scheme: dark;
+    /* Not pure white: the wordmark sits beside a gradient mark, and #fff
+       next to it reads colder than the rest of the dark UI's foreground. */
+    --brand-ink: #f2f3f7;
+    /* Lifted ramp: same five hues, carried up in lightness so every stop
+       clears 6:1 on the dark page instead of sitting at 2.8-3.8:1. */
+    --brand-ramp-0: #5B9DFF;
+    --brand-ramp-1: #6E8BFF;
+    --brand-ramp-2: #8F82FF;
+    --brand-ramp-3: #B07CFF;
+    --brand-ramp-4: #BE78FF;
     /* Charcoal black. The page sits at 7% with each surface a measured step
        above it -- cards and popovers at 10%, the sidebar between the two --
        so raised things still read as raised on a near-black page. Saturation
@@ -1465,4 +1493,20 @@ html {
     0 36px 80px -28px rgb(0 0 0 / 0.85),
     0 20px 60px -32px rgb(124 58 237 / 0.55),
     inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+}
+
+/* Printing.
+ *
+ * Chrome rasterises gradient-filled SVG text as a solid slab over the glyph
+ * box when the typeface is a web font, and Geist is one -- so every printed
+ * page came out with a coloured block where "OS" should be. Reproduced with
+ * the face loaded and not without it, which is what makes it the trigger.
+ *
+ * A flat ramp colour prints correctly, and a printed page is one surface
+ * where losing the gradient costs nothing. The W beside it is a <path> and
+ * prints as a gradient either way, so the mark is unchanged. */
+@media print {
+  .whealthos-os {
+    fill: var(--brand-ramp-solid) !important;
+  }
 }

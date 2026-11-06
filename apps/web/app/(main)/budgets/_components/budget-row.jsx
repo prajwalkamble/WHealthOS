@@ -11,8 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useCurrency } from "@/components/currency-provider";
 
 // Status is a word and an icon as well as a colour, so it survives greyscale,
 // a screen reader, and colour-blindness. The logic itself lives in
@@ -25,6 +25,10 @@ const STATUS = {
 };
 
 const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete }) => {
+  // Bound to the display currency the viewer chose, so this component
+  // formats in it without knowing what it is.
+  const { format: formatCurrency } = useCurrency();
+
   const { pace } = budget;
   const status = STATUS[pace.status.id] ?? STATUS["on-track"];
   const StatusIcon = status.icon;

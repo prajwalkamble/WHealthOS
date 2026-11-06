@@ -7,6 +7,8 @@ import { LANDING_STATS_TAG } from "@/lib/stats";
 import { generateContent } from "@/lib/ai/gemini";
 import { enforceRateLimit } from "@/lib/arcjet";
 import { ActionError, runAction } from "@/lib/action-error";
+import { consumeDailyTransaction, QuotaError } from "@/lib/billing/quota";
+import { effectivePlanId } from "@/lib/billing/service";
 import { requireClerkUserId } from "@/lib/session";
 import { nextOccurrenceAfter } from "@/lib/recurring";
 import { balanceEffect } from "@/lib/money";
@@ -50,17 +52,36 @@ export async function createTransaction(rawData) {
     // keys, so a crafted body cannot smuggle userId/id/status into the create.
     const data = parseOrThrow(transactionInputSchema, rawData);
 
+    // runAction only passes an ActionError's message through to the browser;
+    // anything else becomes "Something went wrong", which would turn "you
+    // have used today's five" into a message nobody can act on. The quota is
+    // a user-facing limit, so its message is translated deliberately.
     const transaction = await withCurrentTenant(async (tx, userId) => {
       const account = await tx.account.findFirst({
         where: { id: data.accountId, userId },
-        select: { id: true },
+        select: { id: true, currency: true },
       });
       if (!account) throw new ActionError("Account not found");
+
+      // Today's allowance, consumed inside this transaction and before the
+      // insert it guards. The plan comes from the database, never from the
+      // payload -- the same rule as every other authorisation decision here.
+      // A refusal rolls back, so nothing has to give the allowance back.
+      const planId = await effectivePlanId(userId, { tx });
+      await consumeDailyTransaction(tx, userId, planId);
 
       const newTransaction = await tx.transaction.create({
         data: {
           ...transactionColumns(data),
           userId,
+          // The ACCOUNT's currency, read from the row above -- never the
+          // currency the person happens to be reading in, and never anything
+          // from the payload. Money entered against a dollar account is a
+          // dollar amount whatever the dashboard is set to, and a display
+          // preference must never be able to decide what a stored amount
+          // means. Copied rather than joined, so moving the account to
+          // another currency later cannot rewrite this transaction's past.
+          currency: account.currency,
           nextRecurringDate: data.isRecurring
             ? nextOccurrenceAfter(data.date, data.recurringInterval)
             : null,
@@ -75,6 +96,9 @@ export async function createTransaction(rawData) {
       });
 
       return newTransaction;
+    }).catch((error) => {
+      if (error instanceof QuotaError) throw new ActionError(error.message);
+      throw error;
     });
 
     revalidatePath("/dashboard");

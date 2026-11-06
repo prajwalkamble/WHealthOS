@@ -1,12 +1,17 @@
-// The WHOS mark.
+import { ICON, ICON_MARGIN, MARK_VIEWBOX, fit } from "@/lib/brand/identity.mjs";
+
+// The WHOS mark: the WHealthOS W, nothing else.
 //
-// A bespoke W, not a font's. The geometry is a four-stroke zigzag given a
-// constant width and mitered joins, with every join and terminal cut flat:
-// the two outer terminals on a shared cap line, the apex and both valleys
-// clipped square. A true miter on a W's valleys runs six to nine units past
-// the vertex, which is why an unclipped version did not fit its own viewBox;
-// clipping them is what gives this mark its machined character rather than a
-// typeset one.
+// This used to be a separate drawing -- a four-stroke zigzag with mitered,
+// flat-clipped joins -- designed when the assistant was the only thing in the
+// product with a symbol. It was a second letterform doing the first one's job,
+// and the two were free to drift apart. The assistant is a feature of the
+// brand, not a brand of its own, so it now renders the identity's own mark
+// from lib/brand/identity.mjs. Change the logo and this changes with it.
+//
+// The heavier `ICON` cut rather than the lockup's, because the assistant draws
+// it at 20px and 32px, where the lockup weight goes spindly and the arrowhead
+// closes up.
 //
 // Why inline rather than <img src="/brand/whos-mark-mono.svg">
 // ------------------------------------------------------------
@@ -16,11 +21,12 @@
 // inherit currentColor; an <img> cannot. It also costs no request and cannot
 // shift the layout while it loads.
 //
-// public/brand/whos-mark.svg holds the same path with the brand ramp, for the
-// places that need a fixed-colour file. tests/whos-agent.test.js reconciles
-// the two so the drawing cannot drift between them.
-export const WHOS_MARK_PATH =
-  "M3.000 6.440L9.960 25.520L11.860 25.560L16.000 15.560L20.140 25.560L22.040 25.520L29.000 6.440L24.860 6.440L20.910 17.270L16.900 7.570L15.100 7.570L11.090 17.270L7.140 6.440Z";
+// public/brand/whos-mark.svg and whos-mark-mono.svg hold the same drawing as
+// files, for anywhere that needs one; both are generated from the identity by
+// scripts/build-brand-assets.mjs, so they cannot disagree with this.
+
+const PLACED = fit(ICON.ink, MARK_VIEWBOX, ICON_MARGIN);
+const VIEW_BOX = `${MARK_VIEWBOX.x} ${MARK_VIEWBOX.y} ${MARK_VIEWBOX.width} ${MARK_VIEWBOX.height}`;
 
 // `label` makes it an image to assistive technology; without one it is
 // decoration and is hidden, which is right wherever a visible text label
@@ -29,7 +35,7 @@ export const WHOS_MARK_PATH =
 // style was silently ignored.
 const WhosMark = ({ className, label, ...props }) => (
   <svg
-    viewBox="0 0 32 32"
+    viewBox={VIEW_BOX}
     className={className}
     {...props}
     // Never a width/height attribute: the size comes from the class, and an
@@ -39,7 +45,20 @@ const WhosMark = ({ className, label, ...props }) => (
     aria-hidden={label ? undefined : "true"}
     focusable="false"
   >
-    <path fill="currentColor" d={WHOS_MARK_PATH} />
+    <g transform={`translate(${PLACED.x} ${PLACED.y}) scale(${PLACED.scale})`}>
+      {/* The letter, then the arrowhead that ends its final stroke. Both in
+          currentColor, so the mark is one flat silhouette that reads at 20px
+          and takes whichever palette the account is on. */}
+      <path
+        d={ICON.path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={ICON.stroke}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <path d={ICON.arrowhead} fill="currentColor" />
+    </g>
   </svg>
 );
 

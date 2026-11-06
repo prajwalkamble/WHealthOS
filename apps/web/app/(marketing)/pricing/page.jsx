@@ -1,7 +1,8 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import PricingPlans from "./_components/pricing-plans";
-import PricingFaq from "./_components/pricing-faq";
+import { auth } from "@clerk/nextjs/server";
+import { plansAreOnSale } from "@/lib/billing/availability";
+import { readCheckoutParams } from "@/lib/billing/checkout-url";
+import PlanPricing from "./_components/plan-pricing";
+import FreePricing from "./_components/free-pricing";
 
 export const metadata = {
   title: "Pricing · WHealthOS",
@@ -9,56 +10,29 @@ export const metadata = {
     "Start free and upgrade when you need more capacity, more control and AI-powered insight into your finances.",
 };
 
-// A server component: only the billing switch and the feature tooltips need
-// state, and those live in PricingPlans.
-export default function PricingPage() {
-  return (
-    // No top padding: the marketing layout reserves the fixed header's space
-    // for every page at once.
-    <div className="container mx-auto px-4 pb-20">
-      <div className="mx-auto max-w-2xl text-center">
-        <span className="inline-block rounded-full border bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Pricing
-        </span>
+// Two pricing pages, one switch.
+//
+// plansAreOnSale() is the same flag /billing, /api/billing/checkout and the
+// Settings plan card read, which is the point: the page that advertises the
+// plans and the endpoint that sells them cannot disagree, because there is
+// only one thing to disagree with. A page claiming the plans are
+// discontinued while checkout takes money -- or offering a plan the endpoint
+// refuses -- are both states this makes unreachable.
+//
+// A server component for auth(): this layout mounts no ClerkProvider for a
+// signed-out visitor, so useAuth() in the browser would have nothing to read.
+export default async function PricingPage({ searchParams }) {
+  const [{ userId }, params] = await Promise.all([auth(), searchParams ?? {}]);
 
-        <h1 className="mt-6 text-4xl font-bold tracking-tight md:text-5xl">
-          Simple pricing.{" "}
-          <span className="gradient-title">Smarter financial management.</span>
-        </h1>
+  if (!plansAreOnSale()) {
+    return <FreePricing signedIn={Boolean(userId)} />;
+  }
 
-        <p className="mt-4 text-muted-foreground">
-          Start for free. Upgrade when you need more control, more capacity, and
-          deeper insights into your finances.
-        </p>
-      </div>
+  // Only the period is read here. The plan in the URL is for /billing, which
+  // this page links to; a visitor coming back from there keeps the billing
+  // toggle they were looking at rather than being reset to monthly. Validated
+  // against the catalogue, so a hand-edited ?duration= arrives as null.
+  const { duration } = readCheckoutParams(params);
 
-      <div className="mt-10">
-        <PricingPlans />
-      </div>
-
-      <div className="mt-14">
-        <PricingFaq />
-      </div>
-
-      <section className="mt-8 flex flex-col items-center justify-between gap-6 rounded-xl border bg-muted/40 p-6 md:flex-row md:p-8">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight">
-            Ready to take control of your finances?
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Start with WHealthOS for free, or explore it first with sample data.
-          </p>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap gap-3">
-          <Button asChild>
-            <Link href="/sign-up">Get Started Free</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/demo">Explore WHealthOS</Link>
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
+  return <PlanPricing signedIn={Boolean(userId)} duration={duration} />;
 }

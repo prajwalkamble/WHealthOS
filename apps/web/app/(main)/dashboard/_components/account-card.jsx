@@ -5,7 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Switch } from '@/components/ui/switch';
 import useFetch from '@/hooks/use-fetch';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
-import Link from 'next/link';
+import PrefetchLink from '@/components/navigation/prefetch-link';
 import React, { useEffect } from 'react'
 import { toast } from 'sonner';
 
@@ -51,7 +51,7 @@ const AccountCard = ({ account }) => {
         />
       </div>
 
-      <Link href={`/account/${id}`}>
+      <PrefetchLink href={`/account/${id}`}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium capitalize pr-14">
             {name}
@@ -75,7 +75,7 @@ const AccountCard = ({ account }) => {
             Expense
           </div>
         </CardFooter>
-      </Link>
+      </PrefetchLink>
     </Card>
   );
 };

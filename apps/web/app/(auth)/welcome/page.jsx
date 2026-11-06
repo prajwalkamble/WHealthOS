@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { checkUser } from "@/lib/checkUser";
+import { safeRedirect } from "@/lib/safe-redirect";
 import ConsentForm from "./_components/consent-form";
 
 export const metadata = {
@@ -20,16 +21,23 @@ export const metadata = {
 // and an OAuth signup never passes through that form at all. A checkbox on the
 // form would gate the email path and silently miss the Google one. A step the
 // server enforces after authentication is the only place that covers both.
-export default async function WelcomePage() {
+export default async function WelcomePage({ searchParams }) {
   const { userId } = await auth();
   // Also enforced by the middleware; this is the page refusing to render for
   // an anonymous visitor on its own account rather than trusting that.
   if (!userId) redirect("/sign-in");
 
+  // Where to go afterwards, when signing up began somewhere with a
+  // destination -- picking a plan on /pricing. Validated rather than trusted:
+  // an unchecked value here would turn the consent step into an open
+  // redirect, which is worth more to a phisher than it looks because the link
+  // genuinely starts on our domain.
+  const next = safeRedirect((await (searchParams ?? {}))?.next, "/dashboard");
+
   // Already has an account, so there is nothing to accept -- someone who
   // bookmarked this page, or came back to it. Never a second consent record.
   const user = await checkUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect(next);
 
-  return <ConsentForm />;
+  return <ConsentForm next={next} />;
 }

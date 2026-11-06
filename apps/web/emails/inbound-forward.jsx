@@ -10,6 +10,7 @@ import {
   Text,
 } from "@react-email/components";
 import * as React from "react";
+import BrandHeader from "./_components/brand-header";
 
 // An email received at a WHealthOS address, forwarded to the maintainer.
 //
@@ -30,6 +31,7 @@ export default function InboundForwardEmail({
       <Preview>{subject ?? "Inbound email"}</Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
+          <BrandHeader />
           <Heading style={styles.title}>{subject ?? "(no subject)"}</Heading>
 
           <Section>

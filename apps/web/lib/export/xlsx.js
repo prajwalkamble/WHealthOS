@@ -1,6 +1,8 @@
 import ExcelJS from "exceljs";
 import { escapeFormula } from "./csv";
 import { periodTotals } from "../analytics";
+import { BRAND_NAME, EMAIL_LOGO, INK } from "../brand/identity.mjs";
+import { LOCKUP_PNG_BASE64 } from "../brand/raster.generated.mjs";
 
 // XLSX generation.
 //
@@ -21,7 +23,10 @@ import { periodTotals } from "../analytics";
 const CURRENCY_FORMAT = '[$₹-en-IN]#,##0.00;[RED]-[$₹-en-IN]#,##0.00';
 const DATE_FORMAT = "dd mmm yyyy";
 
-const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: "FF15173D" } };
+// ExcelJS wants AARRGGBB; the identity stores web hex.
+const argb = (hex) => `FF${hex.replace("#", "").toUpperCase()}`;
+
+const HEADER_FILL = { type: "pattern", pattern: "solid", fgColor: { argb: argb(INK) } };
 const HEADER_FONT = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
 
 // Widths that fit the content without a reader having to drag columns. Not
@@ -106,8 +111,29 @@ function addSummarySheet(workbook, { rows, range, generatedAt }) {
 
   sheet.columns = [{ width: 26 }, { width: 24 }];
 
-  sheet.addRow(["WHealthOS Financial Export"]);
-  sheet.getRow(1).font = { bold: true, size: 14 };
+  // The logo, on the cover sheet only.
+  //
+  // Not on Transactions: that sheet is the machine-readable half of this
+  // export, and a floating image over a data grid is something a recipient has
+  // to work around when they sort, filter or copy the range. Summary is the
+  // sheet a person reads, so the brand belongs here.
+  //
+  // The bytes come from lib/brand/raster.generated.mjs -- the same render as
+  // the email logo, bundled rather than read from public/ at runtime so it
+  // resolves identically under `next dev`, `next start` and a standalone
+  // build.
+  const logo = workbook.addImage({ base64: LOCKUP_PNG_BASE64, extension: "png" });
+  sheet.addRow([]);
+  // Points, not pixels, for a row height: 0.75pt to the px.
+  sheet.getRow(1).height = EMAIL_LOGO.height * 0.75 + 6;
+  sheet.addImage(logo, {
+    tl: { col: 0.12, row: 0.15 },
+    ext: { width: EMAIL_LOGO.width, height: EMAIL_LOGO.height },
+    editAs: "oneCell",
+  });
+
+  const title = sheet.addRow([`${BRAND_NAME} Financial Export`]);
+  title.font = { bold: true, size: 14, color: { argb: argb(INK) } };
   sheet.addRow([]);
   sheet.addRow(["Period", `${range.from} to ${range.to}`]);
   sheet.addRow(["Generated", generatedAt]);
@@ -148,7 +174,7 @@ function addSummarySheet(workbook, { rows, range, generatedAt }) {
 // Builds the workbook and returns it as a Buffer ready to stream.
 export async function transactionsWorkbook({ rows, range, generatedAt }) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "WHealthOS";
+  workbook.creator = BRAND_NAME;
   workbook.created = new Date();
 
   // Summary first, so it is the sheet that opens.

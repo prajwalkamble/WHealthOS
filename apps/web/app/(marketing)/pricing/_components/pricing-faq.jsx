@@ -1,13 +1,17 @@
 import { Plus } from "lucide-react";
-import { FAQS } from "@/data/pricing";
+import { PLAN_FAQS } from "@/data/pricing";
 
 // <details>/<summary> rather than a React accordion: it opens and closes
 // without JavaScript, is keyboard operable for free, and the browser exposes
 // the expanded state to assistive tech without any aria wiring.
-const PricingFaq = () => {
+// faqs: which set to show. There are two -- PLAN_FAQS while the plans are on
+// sale, FREE_FAQS while they are not -- because the questions people ask are
+// not the same ones. The caller decides, since the caller is the page that
+// already knows which pricing it is showing.
+const PricingFaq = ({ faqs = PLAN_FAQS, subtitle }) => {
   const columns = [
-    FAQS.slice(0, Math.ceil(FAQS.length / 2)),
-    FAQS.slice(Math.ceil(FAQS.length / 2)),
+    faqs.slice(0, Math.ceil(faqs.length / 2)),
+    faqs.slice(Math.ceil(faqs.length / 2)),
   ];
 
   return (
@@ -18,7 +22,7 @@ const PricingFaq = () => {
             Frequently asked questions
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Everything you need to know about WHealthOS pricing.
+            {subtitle ?? "Everything you need to know about WHealthOS pricing."}
           </p>
         </div>
       </div>

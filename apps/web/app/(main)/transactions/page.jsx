@@ -1,4 +1,4 @@
-import Link from "next/link";
+import PrefetchLink from "@/components/navigation/prefetch-link";
 import { Plus } from "lucide-react";
 import { getUserTransactions } from "@/actions/transaction";
 import { getUserAccounts } from "@/lib/queries";
@@ -51,10 +51,10 @@ export default async function TransactionsPage() {
           {/* Same button as the dashboard header, so adding a transaction is
               reachable from the section that lists them. */}
           <Button size="sm" className="h-9" asChild>
-            <Link href="/transaction/create">
+            <PrefetchLink href="/transaction/create">
               <Plus className="h-4 w-4" />
               Add Transaction
-            </Link>
+            </PrefetchLink>
           </Button>
         </div>
       </div>

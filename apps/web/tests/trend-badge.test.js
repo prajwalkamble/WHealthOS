@@ -112,4 +112,24 @@ describe("stat cards wiring", () => {
       expect(badgeFor(await read(), fn)).not.toMatch(/multiplier/);
     });
   }
+
+  // A difference between two percentages is not a percentage. The savings
+  // rate badge is the only one measuring one, and it is the only one whose
+  // figure is itself a percentage -- so it is the only place a bare "%" on
+  // the badge could be read as a share of the number beside it.
+  it("labels the Savings Rate change in points, not per cent", async () => {
+    const src = await read();
+    expect(badgeFor(src, "savingsBadge")).toMatch(/suffix=" pts"/);
+
+    for (const fn of ["balanceBadge", "incomeBadge", "expensesBadge"]) {
+      expect(badgeFor(src, fn), fn).not.toMatch(/suffix=/);
+    }
+  });
+
+  it("writes a points change without inventing a percent sign", () => {
+    expect(trendLabel(43, { suffix: " pts" })).toBe("43.0 pts");
+    expect(trendLabel(-7.25, { suffix: " pts" })).toBe("7.3 pts");
+    // Flat still uses the caller's suffix rather than falling back to "%".
+    expect(trendLabel(0, { suffix: " pts" })).toBe("0 pts");
+  });
 });

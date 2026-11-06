@@ -54,8 +54,10 @@ const Status = () => (
         </ul>
         {!TERMS.paidPlansAvailable && (
           <p className="mt-5 border-t pt-4 text-sm leading-6 text-muted-foreground">
-            All of it is free. There is no billing in the application and
-            nothing to cancel.
+            All of it is free, and there is nothing to cancel.{" "}
+            {TERMS.checkoutIntegratedButSellsNothing
+              ? "A checkout exists in Settings, but no plan is on sale through it and paying unlocks nothing — see section 6 of the Terms."
+              : "There is no billing in the application."}
           </p>
         )}
       </div>

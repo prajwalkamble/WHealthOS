@@ -31,6 +31,10 @@ const DATABASE_TESTS = [
   "tests/import-integration.test.js",
   "tests/webhook-integration.test.js",
   "tests/consent-integration.test.js",
+  "tests/billing-integration.test.js",
+  "tests/notification-integration.test.js",
+  "tests/currency-conversion.test.js",
+  "tests/currency-presentation.test.js",
 ];
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);

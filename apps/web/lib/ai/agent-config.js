@@ -7,12 +7,16 @@
 // out, and the two things that actually drive the bill are how much history
 // is resent and how long an answer is allowed to run.
 //
-// Nothing here is a subscription entitlement. WHealthOS has plan *marketing*
-// (data/pricing.js) and no plan enforcement anywhere in the codebase -- there
-// is no plan column, no entitlement table and no payment integration -- so
-// inventing per-plan AI quotas here would be inventing a product decision.
-// This is one server-side policy that applies to every signed-in account, and
-// the place a real entitlement lookup would be wired in later is marked below.
+// Nothing here is a subscription entitlement. That lookup exists now and is
+// applied at the entrance: /api/ai/chat calls requireFeature(..., "ai.queries")
+// before any of these ceilings matter, and the monthly report checks
+// "ai.insights" the same way. These are one server-side cost policy that
+// applies to every signed-in account on top of that.
+//
+// There are still no per-plan AI quotas, and inventing them here would be
+// inventing a product decision: data/pricing.js advertises exactly one
+// metered figure, transactions per day, which lib/billing/quota.js enforces.
+// Nothing published meters AI usage per plan.
 
 const positiveInt = (raw, fallback) => {
   const value = Number.parseInt(raw ?? "", 10);
