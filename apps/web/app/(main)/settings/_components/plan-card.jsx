@@ -114,6 +114,22 @@ const PlanCard = ({
               </PrefetchLink>
               .
             </>
+          ) : hasLive ? (
+            // Plans withdrawn while this account still has a live
+            // subscription. The branch below says "there is nothing to pay",
+            // which was being shown to somebody with a renewal date and a
+            // Cancel button directly underneath it -- the rest of this file
+            // already separates these two cases (see the notices below), the
+            // description did not.
+            <>
+              New subscriptions are not being sold at the moment. Your existing
+              subscription is unaffected and continues on the terms you agreed
+              to; you can cancel it below at any time.{" "}
+              <PrefetchLink href="/pricing" className="underline underline-offset-4">
+                What it covers
+              </PrefetchLink>
+              .
+            </>
           ) : (
             <>
               WHealthOS is free and every feature is included in your account.

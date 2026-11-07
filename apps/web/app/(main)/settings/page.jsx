@@ -44,7 +44,12 @@ export default async function SettingsPage({ searchParams }) {
     email;
 
   return (
-    <div className="space-y-6">
+    // Capped, unlike the data pages either side of it. Settings is mostly
+    // prose -- what a setting does, what is sent where, what the billing
+    // terms are -- and at full width those paragraphs ran about 130
+    // characters a line against a comfortable 45 to 75. The controls are
+    // small enough that none of them wanted the extra room.
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
