@@ -86,11 +86,11 @@ const PayButton = ({
         {phase === PHASES.FAILED && error && (
           <div className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs leading-5">
             <AlertCircle
-              className="mt-0.5 h-4 w-4 shrink-0 text-destructive"
+              className="mt-0.5 h-4 w-4 shrink-0 text-negative"
               aria-hidden
             />
             <div className="space-y-2">
-              <p className="font-semibold text-destructive">{error.message}</p>
+              <p className="font-semibold text-negative">{error.message}</p>
               {error.detail && <p className="text-foreground/80">{error.detail}</p>}
               {error.refresh && (
                 <Button

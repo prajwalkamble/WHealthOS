@@ -50,7 +50,7 @@ const EverythingIncluded = () => (
     <div className="mt-8 md:columns-2 md:gap-8">
       {FEATURE_GROUPS.map((group) => (
         <div key={group.title} className="mb-8 break-inside-avoid last:mb-0">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-sm font-semibold">
             {group.title}
           </h3>
           <ul className="mt-3 space-y-3">

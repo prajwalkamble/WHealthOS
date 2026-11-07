@@ -40,6 +40,11 @@ export const metadata = {
 // this page must not make.
 export const dynamic = "force-dynamic";
 
+// Deliberately not useCurrency(): this is the only screen in the app that
+// must NOT follow the viewer's display currency. Plans are priced in INR and
+// Razorpay charges in INR, so the figure here is the amount that will leave
+// the account. Converting it to whatever the viewer happens to be reading in
+// would misstate the charge on the one screen where that matters.
 const rupees = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",

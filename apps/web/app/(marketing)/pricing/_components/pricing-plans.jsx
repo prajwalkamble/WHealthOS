@@ -91,6 +91,25 @@ const ACCENTS = {
 
 const accentOf = (plan) => ACCENTS[plan.accent] ?? ACCENTS.neutral;
 
+// The feature column stays put while the plans scroll past it.
+//
+// The table is 896px and does not reflow -- a comparison whose columns wrap
+// is no longer a comparison -- so on a 375px phone you see about a third of
+// it. With the first column scrolling away too, the rest was a grid of ticks
+// with nothing to say which feature each one belonged to.
+//
+// A pinned cell has to be opaque or the columns slide under it, and each row
+// tints itself with a translucent muted wash. These are those washes composited
+// against the table's own card background, so a pinned cell matches the row it
+// belongs to instead of punching a card-coloured hole through it.
+const PINNED = "sticky left-0";
+const PINNED_BG = {
+  group: "bg-[color-mix(in_srgb,hsl(var(--muted))_60%,hsl(var(--card)))]",
+  limit: "bg-[color-mix(in_srgb,hsl(var(--muted))_40%,hsl(var(--card)))]",
+  feature:
+    "bg-card group-hover/row:bg-[color-mix(in_srgb,hsl(var(--muted))_30%,hsl(var(--card)))]",
+};
+
 // One continuous table, with a rule between each tier.
 //
 // The highlighted column carries its own outline on both sides, so the column
@@ -146,7 +165,7 @@ const Hint = ({ children }) => (
 
 const Included = ({ yes }) =>
   yes ? (
-    <Check className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+    <Check className="mx-auto h-4 w-4 text-positive" />
   ) : (
     <Minus className="mx-auto h-4 w-4 text-muted-foreground/50" />
   );
@@ -318,7 +337,20 @@ const PricingPlans = ({
 
           <thead>
             <tr>
-              <th scope="col" className="w-[30%] border-b p-6 text-left align-top">
+              <th
+                scope="col"
+                className={cn(
+                  // Narrower while pinned on a phone. At 30% of the table's
+                  // 896px the label column is 269px, which on a 343px screen
+                  // left 74px for the plans being compared -- the pin was
+                  // costing more than it bought. 176px leaves enough of a
+                  // plan column to read.
+                  "w-[11rem] border-b bg-card p-4 text-left align-top sm:w-[30%] sm:p-6",
+                  PINNED,
+                  // Above the body's pinned cells, which scroll under it.
+                  "z-20"
+                )}
+              >
                 <span className="block text-xl font-bold tracking-tight">
                   Features
                 </span>
@@ -459,7 +491,11 @@ const PricingPlans = ({
                   <tr key={row.key} className="bg-muted/60">
                     <th
                       scope="colgroup"
-                      className="border-b px-4 py-2 text-left text-sm font-semibold"
+                      className={cn(
+                        "z-10 border-b px-4 py-2 text-left text-sm font-semibold",
+                        PINNED,
+                        PINNED_BG.group
+                      )}
                     >
                       {row.group.title}
                     </th>
@@ -480,7 +516,14 @@ const PricingPlans = ({
               if (row.kind === "limit") {
                 return (
                   <tr key={row.key} className="bg-muted/40">
-                    <th scope="row" className="border-b p-4 text-left font-normal">
+                    <th
+                      scope="row"
+                      className={cn(
+                        "z-10 border-b p-4 text-left font-normal",
+                        PINNED,
+                        PINNED_BG.limit
+                      )}
+                    >
                       <span className="flex items-start gap-3">
                         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
                           <Icon name={HEADLINE_FEATURE.icon} className="h-4 w-4" />
@@ -527,8 +570,15 @@ const PricingPlans = ({
 
               const { feature } = row;
               return (
-                <tr key={row.key} className="hover:bg-muted/30">
-                  <th scope="row" className="border-b p-4 text-left font-normal">
+                <tr key={row.key} className="group/row hover:bg-muted/30">
+                  <th
+                    scope="row"
+                    className={cn(
+                      "z-10 border-b p-4 text-left font-normal",
+                      PINNED,
+                      PINNED_BG.feature
+                    )}
+                  >
                     <span className="flex items-center gap-2.5">
                       <Icon
                         name={feature.icon}

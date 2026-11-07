@@ -37,7 +37,7 @@ const CheckoutError = ({ error, reset }) => {
   return (
     <Card className="mx-auto max-w-xl">
       <CardHeader>
-        <AlertCircle className="h-7 w-7 text-destructive" aria-hidden />
+        <AlertCircle className="h-7 w-7 text-negative" aria-hidden />
         <CardTitle className="mt-2">Something went wrong on our side</CardTitle>
         <CardDescription className="text-sm leading-6">
           This screen could not be loaded. If you had not pressed the payment
