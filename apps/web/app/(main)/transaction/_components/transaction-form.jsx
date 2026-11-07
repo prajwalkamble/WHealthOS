@@ -18,6 +18,7 @@ import React, { useEffect } from 'react'
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { ReceiptScanner } from './receipt-scanner';
+import { useCurrency } from '@/components/currency-provider';
 import Link from 'next/link';
 
 // Stands in for the scanner in demo mode, saying plainly why it is
@@ -54,6 +55,11 @@ export function AddTransactionForm ({
   onGuestSubmit,
 }) {
   const router = useRouter();
+  // Aliased: `format` in this file is date-fns'. The balance beside each
+  // account in the picker has to agree with the balance on that account's
+  // card, which means going through the same formatter rather than a
+  // hardcoded rupee sign.
+  const { format: formatCurrency } = useCurrency();
   const searchParams = useSearchParams();
   const editId = searchParams.get("edit");
 
@@ -170,7 +176,9 @@ export function AddTransactionForm ({
 
       {/* Type */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Type</label>
+        <label htmlFor="transaction-type" className="text-sm font-medium">
+          Type
+        </label>
         <Select
           onValueChange={(value) => {
             setValue("type", value);
@@ -182,7 +190,11 @@ export function AddTransactionForm ({
           }}
           value={type}
         >
-          <SelectTrigger>
+          <SelectTrigger
+            id="transaction-type"
+            aria-invalid={Boolean(errors.type)}
+            aria-describedby={errors.type ? "transaction-type-error" : undefined}
+          >
             <SelectValue placeholder="Select type" />
           </SelectTrigger>
           <SelectContent>
@@ -192,41 +204,60 @@ export function AddTransactionForm ({
         </Select>
 
         {errors.type && (
-          <p className="text-sm text-red-500">{errors.type.message}</p>
+          <p id="transaction-type-error" className="text-sm text-negative">
+            {errors.type.message}
+          </p>
         )}
       </div>
 
       {/* Amount and Account */}
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Amount</label>
+          <label htmlFor="transaction-amount" className="text-sm font-medium">
+            Amount
+          </label>
           <Input
+            id="transaction-amount"
             type="number"
             step="0.01"
             placeholder="0.00"
+            aria-invalid={Boolean(errors.amount)}
+            aria-describedby={
+              errors.amount ? "transaction-amount-error" : undefined
+            }
             {...register("amount")}
           />
 
           {errors.amount && (
-            <p className="text-sm text-red-500">{errors.amount.message}</p>
+            <p id="transaction-amount-error" className="text-sm text-negative">
+              {errors.amount.message}
+            </p>
           )}
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Account</label>
+          <label htmlFor="transaction-account" className="text-sm font-medium">
+            Account
+          </label>
           <Select
             onValueChange={(value) =>
               setValue("accountId", value, { shouldValidate: true })
             }
             value={accountId ?? ""}
           >
-            <SelectTrigger>
+            <SelectTrigger
+              id="transaction-account"
+              aria-invalid={Boolean(errors.accountId)}
+              aria-describedby={
+                errors.accountId ? "transaction-account-error" : undefined
+              }
+            >
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
             <SelectContent>
               {accounts.map((account) => (
                 <SelectItem key={account.id} value={account.id}>
-                  {account.name} (₹{parseFloat(account.balance).toFixed(2)})
+                  {account.name} ({formatCurrency(parseFloat(account.balance))})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -251,14 +282,18 @@ export function AddTransactionForm ({
           </CreateAccountDrawer>
 
           {errors.accountId && (
-            <p className="text-sm text-red-500">{errors.accountId.message}</p>
+            <p id="transaction-account-error" className="text-sm text-negative">
+              {errors.accountId.message}
+            </p>
           )}
         </div>
       </div>
 
       {/* Category */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Category</label>
+        <label htmlFor="transaction-category" className="text-sm font-medium">
+          Category
+        </label>
         {/* Controlled, not defaultValue: Radix reads defaultValue once, so the
             trigger kept showing the old label after a receipt scan or a type
             change had already rewritten the form value underneath it. */}
@@ -266,7 +301,13 @@ export function AddTransactionForm ({
           onValueChange={(value) => setValue("category", value)}
           value={category ?? ""}
         >
-          <SelectTrigger>
+          <SelectTrigger
+            id="transaction-category"
+            aria-invalid={Boolean(errors.category)}
+            aria-describedby={
+              errors.category ? "transaction-category-error" : undefined
+            }
+          >
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
@@ -279,18 +320,27 @@ export function AddTransactionForm ({
         </Select>
 
         {errors.category && (
-          <p className="text-sm text-red-500">{errors.category.message}</p>
+          <p id="transaction-category-error" className="text-sm text-negative">
+            {errors.category.message}
+          </p>
         )}
       </div>
 
       {/* Date */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Date</label>
+        <label htmlFor="transaction-date" className="text-sm font-medium">
+          Date
+        </label>
         <Popover>
           <PopoverTrigger asChild>
             <Button
+              id="transaction-date"
               variant="outline"
               className="w-full pl-3 text-left font-normal"
+              aria-invalid={Boolean(errors.date)}
+              aria-describedby={
+                errors.date ? "transaction-date-error" : undefined
+              }
             >
               {date ? format(date, "PPP") : <span>Pick a date</span>}
               <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
@@ -310,23 +360,43 @@ export function AddTransactionForm ({
         </Popover>
 
         {errors.date && (
-          <p className="text-sm text-red-500">{errors.date.message}</p>
+          <p id="transaction-date-error" className="text-sm text-negative">
+            {errors.date.message}
+          </p>
         )}
       </div>
 
       {/* Description */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">Description</label>
-        <Input placeholder="Enter description" {...register("description")} />
+        <label htmlFor="transaction-description" className="text-sm font-medium">
+          Description
+        </label>
+        <Input
+          id="transaction-description"
+          placeholder="Enter description"
+          aria-invalid={Boolean(errors.description)}
+          aria-describedby={
+            errors.description ? "transaction-description-error" : undefined
+          }
+          {...register("description")}
+        />
         {errors.description && (
-          <p className="text-sm text-red-500">{errors.description.message}</p>
+          <p
+            id="transaction-description-error"
+            className="text-sm text-negative"
+          >
+            {errors.description.message}
+          </p>
         )}
       </div>
 
       {/* Recurring Toggle */}
       <div className="flex flex-row items-center justify-between rounded-lg border p-4">
         <div className="space-y-0.5">
-          <label className="text-base font-medium cursor-pointer">
+          <label
+            htmlFor="transaction-recurring"
+            className="cursor-pointer text-base font-medium"
+          >
             Recurring Transaction
           </label>
 
@@ -335,6 +405,7 @@ export function AddTransactionForm ({
           </p>
         </div>
         <Switch
+          id="transaction-recurring"
           checked={isRecurring}
           onCheckedChange={(checked) => setValue("isRecurring", checked)}
         />
@@ -343,12 +414,22 @@ export function AddTransactionForm ({
       {/* Recurring Interval */}
       {isRecurring && (
         <div className="space-y-2">
-          <label className="text-sm font-medium">Recurring Interval</label>
+          <label htmlFor="transaction-interval" className="text-sm font-medium">
+            Recurring Interval
+          </label>
           <Select
             onValueChange={(value) => setValue("recurringInterval", value)}
             defaultValue={getValues("recurringInterval")}
           >
-            <SelectTrigger>
+            <SelectTrigger
+              id="transaction-interval"
+              aria-invalid={Boolean(errors.recurringInterval)}
+              aria-describedby={
+                errors.recurringInterval
+                  ? "transaction-interval-error"
+                  : undefined
+              }
+            >
               <SelectValue placeholder="Select interval" />
             </SelectTrigger>
             <SelectContent>
@@ -359,7 +440,10 @@ export function AddTransactionForm ({
             </SelectContent>
           </Select>
           {errors.recurringInterval && (
-            <p className="text-sm text-red-500">
+            <p
+              id="transaction-interval-error"
+              className="text-sm text-negative"
+            >
               {errors.recurringInterval.message}
             </p>
           )}

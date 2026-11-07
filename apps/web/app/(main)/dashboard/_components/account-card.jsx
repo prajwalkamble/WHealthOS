@@ -4,13 +4,15 @@ import { updateDefaultAccount } from '@/actions/accounts';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import useFetch from '@/hooks/use-fetch';
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { useCurrency } from '@/components/currency-provider';
 import PrefetchLink from '@/components/navigation/prefetch-link';
 import React, { useEffect } from 'react'
 import { toast } from 'sonner';
 
 const AccountCard = ({ account }) => {
-  const { name, type, balance, id, isDefault } = account;
+  const { name, type, balance, id, isDefault, _count } = account;
+  const { format: formatCurrency } = useCurrency();
+  const count = _count?.transactions ?? 0;
 
   const {
     loading: updateDefaultLoading,
@@ -58,22 +60,25 @@ const AccountCard = ({ account }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">
-            &#8377;{parseFloat(balance).toFixed(2)}
+          {/* Through the formatter, not a pasted glyph: the balance has to
+              follow the currency the viewer chose, and it printed a hardcoded
+              rupee sign with no digit grouping until now. */}
+          <div className="text-2xl font-bold tabular-nums tracking-tight">
+            {formatCurrency(parseFloat(balance))}
           </div>
           <p className="text-xs text-muted-foreground">
             {type.charAt(0) + type.slice(1).toLowerCase()} Account
           </p>
         </CardContent>
-        <CardFooter className="flex justify-between text-sm text-muted-foreground">
-          <div className="flex items-center">
-            <ArrowUpRight className="mr-1 h-4 w-4 text-green-500" />
-            Income
-          </div>
-          <div className="flex items-center">
-            <ArrowDownRight className="mr-1 h-4 w-4 text-red-500" />
-            Expense
-          </div>
+        {/* This row used to be an up arrow labelled "Income" beside a down
+            arrow labelled "Expense", with no figure against either -- the
+            same two words on every card, carrying nothing. The account's
+            transaction count is already loaded and is the thing a person
+            actually wants here. */}
+        <CardFooter className="text-sm text-muted-foreground">
+          {count === 0
+            ? "No transactions yet"
+            : `${count} transaction${count === 1 ? "" : "s"}`}
         </CardFooter>
       </PrefetchLink>
     </Card>

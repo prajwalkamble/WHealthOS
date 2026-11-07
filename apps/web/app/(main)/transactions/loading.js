@@ -21,9 +21,19 @@ export default function Loading() {
         </div>
       </div>
 
-      {/* The filter bar above the table, then the rows. */}
+      {/* The filter bar above the list, then the rows -- in the shape the
+          page actually takes at this width. Below lg the table is replaced
+          by separate cards, and a single bordered block there was a
+          skeleton of a layout that never arrives. */}
       <Skeleton className="h-11 rounded-lg" />
-      <div className="space-y-px overflow-hidden rounded-xl border">
+
+      <div className="space-y-2 lg:hidden">
+        {Array.from({ length: 8 }, (_, i) => (
+          <Skeleton key={i} className="h-[70px] rounded-lg" />
+        ))}
+      </div>
+
+      <div className="hidden space-y-px overflow-hidden rounded-xl border lg:block">
         {Array.from({ length: 8 }, (_, i) => (
           <Skeleton key={i} className="h-14 rounded-none" />
         ))}

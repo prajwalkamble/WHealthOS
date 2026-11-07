@@ -36,7 +36,7 @@ const DashboardLayout = ({ children }) => {
       </div>
 
       <Suspense
-        fallback={<BarLoader className="mt-4" width={"100%"} color="#9333ea" />}
+        fallback={<BarLoader className="mt-4" width={"100%"} color="hsl(var(--primary))" />}
       >
         {children}
       </Suspense>

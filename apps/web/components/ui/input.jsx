@@ -7,7 +7,11 @@ const Input = React.forwardRef(({ className, type, ...props }, ref) => {
     (<input
       type={type}
       className={cn(
+        // aria-invalid was being set by four different forms and changing
+        // nothing on the control itself, so a rejected field was announced
+        // to a screen reader but left looking identical to a valid one.
         "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+        "aria-[invalid=true]:border-negative aria-[invalid=true]:focus-visible:ring-negative",
         className
       )}
       ref={ref}
