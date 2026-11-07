@@ -37,7 +37,7 @@ const Change = ({ value, previousAmount }) => {
         "inline-flex items-center justify-end gap-1 tabular-nums",
         // Spending up is the unwelcome direction. The arrow and the sign carry
         // it too, so colour is not the only signal.
-        flat ? "text-muted-foreground" : up ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+        flat ? "text-muted-foreground" : up ? "text-negative" : "text-positive"
       )}
     >
       <Icon aria-hidden className="h-3 w-3" />

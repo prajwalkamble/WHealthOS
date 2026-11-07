@@ -49,7 +49,7 @@ const GoalCard = ({ goal, onEdit, onContribute, onComplete, onArchive, onDelete 
 
           <div className="flex shrink-0 items-center gap-1.5">
             {closed && (
-              <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+              <Badge variant="outline" className="text-xs font-normal">
                 {goal.status === "COMPLETED" ? "Done" : "Archived"}
               </Badge>
             )}

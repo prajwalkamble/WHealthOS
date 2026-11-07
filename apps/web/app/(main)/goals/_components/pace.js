@@ -11,13 +11,13 @@
 // met.
 export const paceOf = (goal) => {
   if (goal.status === "COMPLETED" || goal.percentComplete >= 100) {
-    return { label: "Complete", tone: "text-emerald-600 dark:text-emerald-400" };
+    return { label: "Complete", tone: "text-positive" };
   }
   if (!goal.targetDate) return { label: "No deadline", tone: "text-muted-foreground" };
 
   const target = new Date(goal.targetDate).getTime();
   const now = Date.now();
-  if (now >= target) return { label: "Past due", tone: "text-destructive" };
+  if (now >= target) return { label: "Past due", tone: "text-negative" };
 
   const start = new Date(goal.createdAt ?? now).getTime();
   const span = target - start;
@@ -26,5 +26,5 @@ export const paceOf = (goal) => {
   const expected = ((now - start) / span) * 100;
   return goal.percentComplete + 0.5 >= expected
     ? { label: "On track", tone: "text-muted-foreground" }
-    : { label: "Behind", tone: "text-amber-600 dark:text-amber-400" };
+    : { label: "Behind", tone: "text-caution" };
 };

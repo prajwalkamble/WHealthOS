@@ -146,7 +146,7 @@ const ContributionDrawer = ({ goal, onOpenChange, onSaved }) => {
           </form>
 
           <section className="px-4 pb-4 pt-6">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="text-sm font-semibold">
               History
             </h3>
             {loading ? (

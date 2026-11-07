@@ -18,13 +18,17 @@ import { useCurrency } from "@/components/currency-provider";
 // a screen reader, and colour-blindness. The logic itself lives in
 // lib/budget-pace.js; this only renders it.
 const STATUS = {
-  exceeded: { icon: AlertTriangle, className: "text-destructive" },
-  "at-risk": { icon: AlertTriangle, className: "text-destructive" },
-  watch: { icon: TrendingUp, className: "text-amber-600 dark:text-amber-400" },
+  exceeded: { icon: AlertTriangle, className: "text-negative" },
+  "at-risk": { icon: AlertTriangle, className: "text-negative" },
+  watch: { icon: TrendingUp, className: "text-caution" },
   "on-track": { icon: CheckCircle2, className: "text-muted-foreground" },
 };
 
-const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete }) => {
+// wide: this row is rendered full-bleed rather than in the category grid.
+// Without it the overall budget's figures and its definition list stretched
+// the whole content column, leaving every label about a thousand pixels from
+// the value it names.
+const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete, wide = false }) => {
   // Bound to the display currency the viewer chose, so this component
   // formats in it without knowing what it is.
   const { format: formatCurrency } = useCurrency();
@@ -72,7 +76,12 @@ const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete
           </DropdownMenu>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+        <div
+          className={cn(
+            "mt-4 flex flex-wrap items-end gap-x-3 gap-y-1",
+            wide ? "justify-start" : "justify-between"
+          )}
+        >
           <p className="text-2xl font-bold tabular-nums tracking-tight">
             {formatCurrency(budget.spent)}
           </p>
@@ -96,7 +105,12 @@ const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete
             : `${formatCurrency(pace.remaining)} left`}
         </p>
 
-        <dl className="mt-4 space-y-1.5 border-t pt-3 text-xs">
+        <dl
+          className={cn(
+            "mt-4 grid gap-y-1.5 border-t pt-3 text-xs",
+            wide && "sm:grid-cols-2 sm:gap-x-10 lg:grid-cols-3"
+          )}
+        >
           {/* Expected pace is the budget spread evenly across the month. It is
               a plan, not a prediction, and is labelled that way. */}
           <div className="flex justify-between gap-2">
@@ -110,7 +124,7 @@ const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete
               <dd
                 className={cn(
                   "tabular-nums",
-                  pace.actualPerDay > pace.expectedPerDay && "text-amber-600 dark:text-amber-400"
+                  pace.actualPerDay > pace.expectedPerDay && "text-caution"
                 )}
               >
                 {formatCurrency(pace.actualPerDay)}/day
@@ -124,7 +138,7 @@ const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete
               <dd className="tabular-nums">
                 {formatCurrency(pace.projected)}
                 {pace.projectedOverBy !== null && (
-                  <span className="text-destructive">
+                  <span className="text-negative">
                     {" "}
                     (+{formatCurrency(pace.projectedOverBy)})
                   </span>
@@ -155,8 +169,8 @@ const BudgetRow = ({ budget, label, periodLabel, previousLabel, onEdit, onDelete
                     Math.abs(pace.spendChangePercent) < 0.05
                       ? "text-muted-foreground"
                       : pace.spendChangePercent > 0
-                        ? "text-destructive"
-                        : "text-emerald-600 dark:text-emerald-400"
+                        ? "text-negative"
+                        : "text-positive"
                   )}
                 >
                   {Math.abs(pace.spendChangePercent) >= 0.05 &&

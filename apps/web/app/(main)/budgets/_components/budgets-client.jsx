@@ -20,6 +20,7 @@ import BudgetForm from "./budget-form";
 import BudgetRow from "./budget-row";
 import Attention from "./attention";
 import { attentionItems, NEAR_LIMIT_PERCENT } from "@/lib/budget-pace";
+import { SummaryStrip, SummaryCell } from "@/components/summary-strip";
 import {
   Select,
   SelectContent,
@@ -123,21 +124,12 @@ const BudgetsClient = ({ data, period, options }) => {
               the overall budget when one exists, because it already covers
               every category -- adding it to the category budgets would count
               the same spending twice. */}
-          <section
-            aria-label={`Budget summary for ${periodInfo.label}`}
-            className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border lg:grid-cols-4"
-          >
-            <div className="bg-card p-4">
-              <p className="text-xs text-muted-foreground">Total budget</p>
-              <p className="mt-1 text-xl font-bold tabular-nums tracking-tight">
-                {formatCurrency(totals.budgeted)}
-              </p>
-            </div>
-            <div className="bg-card p-4">
-              <p className="text-xs text-muted-foreground">Spent</p>
-              <p className="mt-1 text-xl font-bold tabular-nums tracking-tight">
-                {formatCurrency(totals.spent)}
-              </p>
+          <SummaryStrip aria-label={`Budget summary for ${periodInfo.label}`}>
+            <SummaryCell
+              label="Total budget"
+              value={formatCurrency(totals.budgeted)}
+            />
+            <SummaryCell label="Spent" value={formatCurrency(totals.spent)}>
               {/* Spending less than last period is the good direction, so down
                   is green and up is red. The arrow and sign carry it too, so
                   the meaning does not rest on colour alone. */}
@@ -152,8 +144,8 @@ const BudgetsClient = ({ data, period, options }) => {
                     Math.abs(totals.spendChangePercent) < 0.05
                       ? "text-muted-foreground"
                       : totals.spendChangePercent > 0
-                        ? "text-destructive"
-                        : "text-emerald-600 dark:text-emerald-400"
+                        ? "text-negative"
+                        : "text-positive"
                   )}
                 >
                   {Math.abs(totals.spendChangePercent) >= 0.05 &&
@@ -166,46 +158,37 @@ const BudgetsClient = ({ data, period, options }) => {
                   {totals.spendChangePercent.toFixed(1)}% vs {periodInfo.previousLabel}
                 </p>
               )}
-            </div>
-            <div className="bg-card p-4">
-              <p className="text-xs text-muted-foreground">
-                {totals.remaining < 0 ? "Over budget" : "Remaining"}
-              </p>
-              {/* Red only when it has actually gone negative. A positive
-                  remaining is the ordinary case and needs no colour. */}
-              <p
-                className={cn(
-                  "mt-1 text-xl font-bold tabular-nums tracking-tight",
-                  totals.remaining < 0 && "text-destructive"
-                )}
-              >
-                {formatCurrency(Math.abs(totals.remaining))}
-              </p>
-            </div>
-            <div className="bg-card p-4">
-              <p className="text-xs text-muted-foreground">Utilisation</p>
-              <p
-                className={cn(
-                  "mt-1 text-xl font-bold tabular-nums tracking-tight",
-                  totals.percentUsed !== null &&
-                    totals.percentUsed > 100 &&
-                    "text-destructive",
-                  totals.percentUsed !== null &&
-                    totals.percentUsed >= NEAR_LIMIT_PERCENT &&
-                    totals.percentUsed <= 100 &&
-                    "text-amber-600 dark:text-amber-400"
-                )}
-              >
-                {totals.percentUsed === null
+            </SummaryCell>
+            {/* Red only when it has actually gone negative. A positive
+                remaining is the ordinary case and needs no colour. */}
+            <SummaryCell
+              label={totals.remaining < 0 ? "Over budget" : "Remaining"}
+              value={formatCurrency(Math.abs(totals.remaining))}
+              valueClassName={cn(totals.remaining < 0 && "text-negative")}
+            />
+            <SummaryCell
+              label="Utilisation"
+              value={
+                totals.percentUsed === null
                   ? "Not available"
-                  : `${totals.percentUsed.toFixed(1)}%`}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                {progress.daysElapsed} of {progress.totalDays} days elapsed
-                {progress.daysRemaining > 0 && ` · ${progress.daysRemaining} left`}
-              </p>
-            </div>
-          </section>
+                  : `${totals.percentUsed.toFixed(1)}%`
+              }
+              valueClassName={cn(
+                totals.percentUsed !== null &&
+                  totals.percentUsed > 100 &&
+                  "text-negative",
+                totals.percentUsed !== null &&
+                  totals.percentUsed >= NEAR_LIMIT_PERCENT &&
+                  totals.percentUsed <= 100 &&
+                  "text-caution"
+              )}
+              hint={`${progress.daysElapsed} of ${progress.totalDays} days elapsed${
+                progress.daysRemaining > 0
+                  ? ` \u00B7 ${progress.daysRemaining} left`
+                  : ""
+              }`}
+            />
+          </SummaryStrip>
 
           {/* Level 2: only what is actually true, and nothing if all is well. */}
           <Attention items={attention} />
@@ -232,10 +215,11 @@ const BudgetsClient = ({ data, period, options }) => {
         <div className="space-y-6">
           {overall && (
             <section className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h2 className="text-sm font-semibold">
                 Overall
               </h2>
               <BudgetRow
+                wide
                 budget={overall}
                 label={label(overall)}
                 periodLabel={periodInfo.label}
@@ -251,7 +235,7 @@ const BudgetsClient = ({ data, period, options }) => {
 
           {categories.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h2 className="text-sm font-semibold">
                 By category
               </h2>
               <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

@@ -18,6 +18,7 @@ import CashflowSankey from "./cashflow-sankey";
 import FlowChart from "./flow-chart";
 import CategoryTable from "./category-table";
 import { useCurrency } from "@/components/currency-provider";
+import { SummaryStrip, SummaryCell } from "@/components/summary-strip";
 
 const CATEGORY_NAME = new Map(defaultCategories.map((c) => [c.id, c.name]));
 const ALL = "__all__";
@@ -46,8 +47,8 @@ export const Delta = ({ value, invert = false }) => {
         flat
           ? "text-muted-foreground"
           : good
-            ? "text-emerald-600 dark:text-emerald-400"
-            : "text-destructive"
+            ? "text-positive"
+            : "text-negative"
       )}
     >
       <Icon aria-hidden className="h-3 w-3" />
@@ -56,12 +57,8 @@ export const Delta = ({ value, invert = false }) => {
   );
 };
 
-const Headline = ({ label, value, delta, invert }) => (
-  <div className="p-4">
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className="mt-1 text-xl font-bold tabular-nums tracking-tight">{value}</p>
-    <div className="mt-1">{delta}</div>
-  </div>
+const NoPrior = () => (
+  <span className="text-xs text-muted-foreground">No prior data</span>
 );
 
 const AnalyticsWorkspace = ({ data, filters }) => {
@@ -175,71 +172,59 @@ const AnalyticsWorkspace = ({ data, filters }) => {
           {/* Deliberately a single divided strip rather than a row of cards:
               these are context for the analysis below, not the point of the
               page. The dashboard is where figures lead. */}
-          <section
+          <SummaryStrip
             aria-label={`${period.label} ${period.year} compared with ${period.previousLabel}`}
-            className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border lg:grid-cols-4"
           >
-            <div className="bg-card">
-              <Headline
-                label={`Income · ${period.label}`}
-                value={formatCurrency(current.income)}
-                delta={
-                  hasPriorData ? (
-                    <Delta value={change(current.income, previous.income)} />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      No prior data
-                    </span>
-                  )
-                }
-              />
-            </div>
-            <div className="bg-card">
-              <Headline
-                label={`Expenses · ${period.label}`}
-                value={formatCurrency(current.expenses)}
-                delta={
-                  hasPriorData ? (
-                    <Delta value={change(current.expenses, previous.expenses)} invert />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      No prior data
-                    </span>
-                  )
-                }
-              />
-            </div>
-            <div className="bg-card">
-              <Headline
-                label="Net"
-                value={formatCurrency(current.net)}
-                delta={
-                  hasPriorData ? (
-                    <Delta value={change(current.net, previous.net)} />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      No prior data
-                    </span>
-                  )
-                }
-              />
-            </div>
-            <div className="bg-card">
-              <Headline
-                label="Savings rate"
-                value={savings}
-                delta={
-                  current.savingsRate === null ? (
-                    <span className="text-xs text-muted-foreground">
-                      Needs income to compute
-                    </span>
-                  ) : (
-                    <Delta value={change(current.savingsRate, previous.savingsRate)} />
-                  )
-                }
-              />
-            </div>
-          </section>
+            <SummaryCell
+              label={`Income \u00B7 ${period.label}`}
+              value={formatCurrency(current.income)}
+            >
+              <div className="mt-1">
+                {hasPriorData ? (
+                  <Delta value={change(current.income, previous.income)} />
+                ) : (
+                  <NoPrior />
+                )}
+              </div>
+            </SummaryCell>
+            <SummaryCell
+              label={`Expenses \u00B7 ${period.label}`}
+              value={formatCurrency(current.expenses)}
+            >
+              <div className="mt-1">
+                {hasPriorData ? (
+                  <Delta
+                    value={change(current.expenses, previous.expenses)}
+                    invert
+                  />
+                ) : (
+                  <NoPrior />
+                )}
+              </div>
+            </SummaryCell>
+            <SummaryCell label="Net" value={formatCurrency(current.net)}>
+              <div className="mt-1">
+                {hasPriorData ? (
+                  <Delta value={change(current.net, previous.net)} />
+                ) : (
+                  <NoPrior />
+                )}
+              </div>
+            </SummaryCell>
+            <SummaryCell label="Savings rate" value={savings}>
+              <div className="mt-1">
+                {current.savingsRate === null ? (
+                  <span className="text-xs text-muted-foreground">
+                    Needs income to compute
+                  </span>
+                ) : (
+                  <Delta
+                    value={change(current.savingsRate, previous.savingsRate)}
+                  />
+                )}
+              </div>
+            </SummaryCell>
+          </SummaryStrip>
 
           <CashflowSankey
             cashflow={data.cashflow}

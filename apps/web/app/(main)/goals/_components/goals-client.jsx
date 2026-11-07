@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Plus, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Drawer,
   DrawerContent,
@@ -20,16 +19,7 @@ import { paceOf } from "./pace";
 import GoalForm from "./goal-form";
 import ContributionDrawer from "./contribution-drawer";
 import { useCurrency } from "@/components/currency-provider";
-
-const Metric = ({ label, value, hint }) => (
-  <Card>
-    <CardContent className="p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums tracking-tight">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-    </CardContent>
-  </Card>
-);
+import { SummaryStrip, SummaryCell } from "@/components/summary-strip";
 
 const GoalsClient = ({ goals }) => {
   // Bound to the display currency the viewer chose, so this component
@@ -109,10 +99,13 @@ const GoalsClient = ({ goals }) => {
       ) : (
         <>
           {active.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric label="Active goals" value={active.length} />
-              <Metric label="Total target" value={formatCurrency(totals.target)} />
-              <Metric
+            <SummaryStrip aria-label="Goal summary">
+              <SummaryCell label="Active goals" value={active.length} />
+              <SummaryCell
+                label="Total target"
+                value={formatCurrency(totals.target)}
+              />
+              <SummaryCell
                 label="Put aside"
                 value={formatCurrency(totals.saved)}
                 hint={
@@ -121,12 +114,12 @@ const GoalsClient = ({ goals }) => {
                     : undefined
                 }
               />
-              <Metric
+              <SummaryCell
                 label="On track"
                 value={`${totals.onTrack} of ${active.length}`}
                 hint="Against their own deadlines"
               />
-            </div>
+            </SummaryStrip>
           )}
 
           {active.length > 0 && (
@@ -163,7 +156,7 @@ const GoalsClient = ({ goals }) => {
 
           {done.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <h2 className="text-sm font-semibold">
                 Completed and archived
               </h2>
               <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

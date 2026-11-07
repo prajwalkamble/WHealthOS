@@ -7,9 +7,9 @@ import { cn } from "@/lib/utils";
 // in lib/budget-pace.js. An empty list renders nothing at all: silence is the
 // honest signal, not a reassuring card.
 const TONE = {
-  exceeded: { icon: AlertTriangle, className: "text-destructive" },
-  "at-risk": { icon: AlertTriangle, className: "text-destructive" },
-  watch: { icon: TrendingUp, className: "text-amber-600 dark:text-amber-400" },
+  exceeded: { icon: AlertTriangle, className: "text-negative" },
+  "at-risk": { icon: AlertTriangle, className: "text-negative" },
+  watch: { icon: TrendingUp, className: "text-caution" },
 };
 
 const Attention = ({ items }) => {
