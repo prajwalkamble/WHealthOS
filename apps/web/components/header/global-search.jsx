@@ -98,7 +98,7 @@ const GlobalSearch = ({ className }) => {
           className="h-9 w-full rounded-lg border bg-muted/50 pl-9 pr-9 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring"
         />
         {loading && (
-          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground motion-reduce:[animation-duration:3s]" />
         )}
       </div>
 
@@ -118,7 +118,7 @@ const GlobalSearch = ({ className }) => {
 
           {results?.accounts.length > 0 && (
             <>
-              <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground">
                 Accounts
               </p>
               {results.accounts.map((account) => (
@@ -139,7 +139,7 @@ const GlobalSearch = ({ className }) => {
 
           {results?.transactions.length > 0 && (
             <>
-              <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground">
                 Transactions
               </p>
               {results.transactions.map((transaction) => (

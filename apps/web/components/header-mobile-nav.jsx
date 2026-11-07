@@ -76,7 +76,7 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
                   <span
                     className={cn(
                       items
-                        ? "text-xs font-semibold uppercase tracking-wider text-foreground"
+                        ? "text-xs font-medium text-muted-foreground"
                         : linkClass,
                       "cursor-default"
                     )}
