@@ -327,7 +327,26 @@ const PricingPlans = ({
           table's top edge; without it the container would clip it. The table
           scrolls sideways rather than reflowing -- a comparison whose columns
           wrap is no longer a comparison. */}
-      <div className="mt-6 overflow-x-auto pt-5">
+      {/* A fade on the trailing edge, below the width where the table fits.
+          At 375 the pinned label column and the Free column fill the screen,
+          so Pro's and Intelligent's prices sit entirely off to the right --
+          on a pricing page. The cut-off column hints at it; this says it.
+          pointer-events-none so it never intercepts a tap on the table, and
+          hidden from lg where there is nothing left to scroll to. */}
+      <p className="mt-6 text-xs text-muted-foreground lg:hidden">
+        Scroll sideways to compare every plan.
+      </p>
+      {/* The wrapper holds only the scroller, so the fade covers the table
+          and not the gap above it -- and it fades to card, which is what the
+          table is painted in. Fading to background looked right in light,
+          where the two tokens are both white, and wrong in dark, where they
+          are three per cent apart. */}
+      <div className="relative">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-0 z-20 w-12 bg-gradient-to-l from-card to-transparent lg:hidden"
+        />
+        <div className="overflow-x-auto pt-5">
         <table className="w-full min-w-[56rem] border-separate border-spacing-0 rounded-xl border bg-card">
           {/* Built from the catalogue rather than written out, so renaming a
               tier cannot leave the screen-reader caption behind. */}
@@ -620,6 +639,7 @@ const PricingPlans = ({
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </TooltipProvider>
   );

@@ -71,8 +71,19 @@ const CategoryTable = ({ rows, categoryName, periodLabel, previousLabel, hasPrio
         </p>
       ) : (
         // Scrolls sideways only on a narrow screen; a comparison whose columns
-        // wrap stops being a comparison.
-        <div className="overflow-x-auto">
+        // wrap stops being a comparison. Signposted the same way the pricing
+        // table is, because it is the same trade-off: below sm the prior
+        // period, change and count sit off the right edge, and a fade plus a
+        // line of text is what says so.
+        <div className="relative">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-card to-transparent sm:hidden"
+          />
+          <p className="px-4 pb-2 text-xs text-muted-foreground sm:hidden">
+            Scroll sideways for the comparison.
+          </p>
+          <div className="overflow-x-auto">
           <Table className="min-w-[34rem]">
             <TableHeader>
               <TableRow>
@@ -109,6 +120,7 @@ const CategoryTable = ({ rows, categoryName, periodLabel, previousLabel, hasPrio
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
     </section>
