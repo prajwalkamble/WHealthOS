@@ -71,7 +71,7 @@ const MainLayout = async ({ children }) => {
     // Always wrapped: everything under (main) is signed in, and the shell is
     // full of Clerk components -- the avatar menu, the profile screen.
     <Clerk>
-    <CurrencyProvider initial={currency} ledger={ledger} rates={rates}>
+    <CurrencyProvider initial={currency} ledger={ledger} rates={rates} sync>
     <SidebarProvider defaultOpen={defaultOpen}>
       {/* Applies the theme saved on the account, for a browser that has not
           seen this user before. */}

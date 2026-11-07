@@ -183,7 +183,8 @@ describe("switching stays local", () => {
     for (const file of [
       "components/currency-provider.jsx",
       "components/currency-selector.jsx",
-      "actions/currency.js",
+      "app/api/currency/route.js",
+      "lib/currency/preference.js",
     ]) {
       const source = read(file);
       for (const forbidden of [
@@ -200,24 +201,60 @@ describe("switching stays local", () => {
 
   // The specific line that caused it: it re-rendered the whole signed-in
   // tree on the server for a change the browser had already made.
-  // Checked by IMPORT, not by searching the text: the file explains this
-  // history in a comment, and a blunt string match would flag the
+  // Checked by IMPORT, not by searching the text: these files explain the
+  // history in comments, and a blunt string match would flag the
   // explanation. What cannot be called is what has not been imported.
   it("does not revalidate a path when the preference is saved", () => {
-    const action = read("actions/currency.js");
-    expect(action).not.toMatch(/^import .*from "next\/cache"/m);
-    const calls = action
-      .split("\n")
-      .filter((line) => !line.trim().startsWith("//"))
-      .join("\n");
-    expect(calls).not.toMatch(/\brevalidate(Path|Tag)\s*\(/);
+    for (const file of ["app/api/currency/route.js", "lib/currency/preference.js"]) {
+      const source = read(file);
+      expect(source, file).not.toMatch(/^import .*from "next\/cache"/m);
+      const calls = source
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .join("\n");
+      expect(calls, file).not.toMatch(/\brevalidate(Path|Tag)\s*\(/);
+    }
   });
 
-  it("does not await the server action on the selection path", () => {
+  // THE one that matters, and the one I got wrong first time.
+  //
+  // Next re-renders the current route's server components after ANY Server
+  // Action resolves. That is the protocol, independent of revalidatePath. So
+  // persisting the preference through an action re-rendered the entire
+  // signed-in tree a moment after every change -- which is precisely what
+  // "the whole site reloads" looked like. Removing revalidatePath did not
+  // fix it; moving off Server Actions did.
+  it("persists through a route handler, never a Server Action", () => {
+    // Checked as a DIRECTIVE, not as a substring: a directive only has
+    // effect as the first statement of the file, and both of these explain
+    // in a comment why they are not one. A blunt match flags the
+    // explanation -- which it duly did.
+    const directive = (file) => read(file).trimStart().split("\n")[0].trim();
+    expect(directive("lib/currency/preference.js")).not.toMatch(/^["']use server["']/);
+    expect(directive("app/api/currency/route.js")).not.toMatch(/^["']use server["']/);
+
     const provider = read("components/currency-provider.jsx");
-    expect(provider).not.toContain("await setDisplayCurrency");
+    expect(provider).toContain('fetch("/api/currency"');
+    // No action module may be imported by the provider at all.
+    expect(provider).not.toMatch(/from "@\/actions\//);
     // ...and it is debounced, so clicking through four currencies is one write.
     expect(provider).toContain("SYNC_DELAY_MS");
+  });
+
+  // §6: "Avoid unnecessary synchronization when the preference has not
+  // changed." Choosing the currency the account already holds writes nothing.
+  it("does not write a preference the account already holds", () => {
+    const provider = read("components/currency-provider.jsx");
+    expect(provider).toContain("persisted.current === next");
+    expect(provider).toContain("if (response.ok) persisted.current = next;");
+  });
+
+  // The guest demo has no account, so it makes no request whatsoever.
+  it("makes no network call at all for a guest", () => {
+    const demo = read("app/demo/layout.jsx");
+    expect(demo).not.toMatch(/\bsync\b/);
+    const main = read("app/(main)/layout.js");
+    expect(main).toContain("sync>");
   });
 
   it("writes the cookie in the browser, so nothing waits on a round trip", () => {

@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { setDisplayCurrency } from "@/actions/currency";
 import { formatCompactCurrency, formatCurrency } from "@/lib/currency/format";
 import {
   DEFAULT_CURRENCY,
@@ -66,7 +65,16 @@ const writeCookie = (currency) => {
   }
 };
 
-export function CurrencyProvider({ children, initial, ledger = null, rates = null }) {
+export function CurrencyProvider({
+  children,
+  initial,
+  ledger = null,
+  rates = null,
+  // Whether there is an account to remember this on. False for the guest
+  // demo, which then makes no request at all -- its cookie is the whole of
+  // its persistence.
+  sync = false,
+}) {
   const resolved = useMemo(
     () => ({
       currency: coerceCurrency(initial?.currency, DEFAULT_CURRENCY),
@@ -93,6 +101,17 @@ export function CurrencyProvider({ children, initial, ledger = null, rates = nul
   // because a background write failed would be the worst of both.
   const timer = useRef(null);
   const syncing = useRef(null);
+
+  // What the account is already known to hold.
+  //
+  // Seeded from the server's own resolution: if it resolved from the account,
+  // the account holds exactly that. Choosing it again is then a write of a
+  // value that is already there, and the cheapest request is the one not
+  // made -- which matters most for the common case of clicking through a few
+  // currencies to compare and settling back on the original.
+  const persisted = useRef(
+    initial?.source === CURRENCY_SOURCE.ACCOUNT ? resolved.currency : null
+  );
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const select = useCallback((code) => {
@@ -106,18 +125,37 @@ export function CurrencyProvider({ children, initial, ledger = null, rates = nul
     //    so a navigation does not flicker back to the old currency.
     writeCookie(next);
 
-    // 3. The account, eventually. Skipped when it would be a no-op.
+    // 3. The account, eventually, and only when there is one.
+    //
+    // A plain fetch to a route handler -- NOT a Server Action. Next
+    // re-renders the current route's server components after any action
+    // resolves, so doing this through one re-rendered the whole signed-in
+    // tree a moment after each change and looked exactly like a page reload.
+    // A route handler returns JSON and nothing re-renders.
+    //
+    // keepalive so a change made just before navigating still lands.
+    if (!sync) return;
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      if (syncing.current === next) return;
+      // Already there, or already in flight. Either way, nothing to send.
+      if (persisted.current === next || syncing.current === next) return;
       syncing.current = next;
-      // Deliberately not awaited and deliberately not in a transition: this
-      // must never make the UI pending.
-      setDisplayCurrency(next).catch(() => {
-        syncing.current = null;
-      });
+      fetch("/api/currency", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ currency: next }),
+        keepalive: true,
+      })
+        .then((response) => {
+          if (response.ok) persisted.current = next;
+        })
+        .catch(() => {
+          // Nothing is waiting on this and the cookie already holds the
+          // choice. Clearing the marker lets a later attempt retry.
+          syncing.current = null;
+        });
     }, SYNC_DELAY_MS);
-  }, []);
+  }, [sync]);
 
   // The presentation decision, recomputed only when the currency or the data
   // behind it changes -- not on every render of every consumer.

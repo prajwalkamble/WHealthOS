@@ -464,8 +464,9 @@ describe("billing is insulated from the display currency", () => {
   // The currency action writes a reading preference and nothing else. If it
   // ever touches an account, a transaction or a subscription, that is a
   // display setting rewriting stored money.
-  it("lets the currency action change nothing but the preference", () => {
-    const action = read("actions/currency.js");
+  it("lets the currency endpoint change nothing but the preference", () => {
+    const action =
+      read("app/api/currency/route.js") + read("lib/currency/preference.js");
     expect(action).toContain("displayCurrency");
     for (const forbidden of [
       "account.update",
@@ -535,5 +536,21 @@ describe("nothing formats money outside the conversion path", () => {
     expect(core).toContain("const refuse = (reason) => ({");
     expect(core).toContain("currency: held[0]");
     expect(core).toContain("rate: null");
+  });
+});
+
+// --- The development-only country override ------------------------------------
+
+describe("the dev country override", () => {
+  // It exists so the geolocation behaviour can be seen on localhost, where
+  // the edge header does not exist. It must not be able to exist in a
+  // production build -- asserted structurally, because the guard is one
+  // condition and conditions get edited.
+  it("is guarded on NODE_ENV", () => {
+    const server = read("lib/currency/server.js");
+    expect(server).toContain("whealth-dev-country");
+    expect(server).toContain('process.env.NODE_ENV === "production"');
+    // The production branch must use the real headers, untouched.
+    expect(server).toMatch(/NODE_ENV === "production"\s*\?\s*rawHeaders/);
   });
 });

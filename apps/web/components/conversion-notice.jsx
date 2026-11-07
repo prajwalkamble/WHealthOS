@@ -3,34 +3,29 @@
 import { Info } from "lucide-react";
 import { useCurrency } from "@/components/currency-provider";
 
-// One line saying what the figures on this page are.
+// One line, and only when something needs explaining.
 //
-// It renders in exactly two situations, and nothing in between:
+// It renders in exactly one situation: a currency was chosen that could not
+// be converted to, so the figures are still in the ledger's own currency.
+// Without it the selector looks broken -- you pick yen, nothing changes, and
+// nothing says why.
 //
-//   converted -- the amounts have been multiplied by a published rate, so
-//                they are estimates and the date behind them matters;
-//   refused   -- a currency was chosen that could not be converted to, so the
-//                figures are still in the ledger's own currency and the
-//                selector would otherwise look broken.
+// It does NOT announce a successful conversion. That banner sat above every
+// dashboard restating the rate and its date on every page view, which is
+// noise once you have chosen a currency deliberately. The disclosure that
+// converted amounts are indicative, at a reference rate rather than a dealing
+// one, is in Settings -> Currency, where somebody looking for it will look
+// and where it is not repeated forty times a day.
 //
-// Silent when the figures are simply what is stored, which is the common case
-// and needs no explanation.
+// Silent whenever the figures are simply what is stored, or are converted
+// successfully -- which between them is the common case.
 export default function ConversionNotice() {
-  const {
-    converted,
-    locked,
-    selected,
-    currency,
-    ledger,
-    conversionReason,
-    rateAsOf,
-    rateStale,
-  } = useCurrency();
+  const { locked, selected, currency, ledger, conversionReason } = useCurrency();
 
-  if (!converted && !locked) return null;
+  if (!locked) return null;
 
   const line = () => {
-    if (locked && conversionReason === "mixed-ledger") {
+    if (conversionReason === "mixed-ledger") {
       return (
         <>
           Your accounts are held in more than one currency
@@ -41,21 +36,11 @@ export default function ConversionNotice() {
         </>
       );
     }
-    if (locked) {
-      return (
-        <>
-          No exchange rate is available for {selected} yet, so these figures
-          are shown in {currency}, which is the currency they are held in.
-          They are not being relabelled.
-        </>
-      );
-    }
     return (
       <>
-        Converted to {currency} at the European Central Bank reference rate
-        {rateAsOf ? ` of ${rateAsOf}` : ""}. Indicative only — not a dealing
-        rate, and not what a bank would settle at.
-        {rateStale ? " This rate is older than usual; a newer one has not been published or retrieved." : ""}
+        No exchange rate is available for {selected} yet, so these figures are
+        shown in {currency}, which is the currency they are held in. They are
+        not being relabelled.
       </>
     );
   };

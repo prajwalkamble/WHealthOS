@@ -38,6 +38,23 @@ It is approximate, and a VPN gives a confident wrong answer. That is fine,
 because it is only ever a **suggestion**: it sits at the bottom of the
 precedence below, and one click overrides it permanently.
 
+**On localhost there is no such header**, so every visitor resolves to the
+application default and the behaviour looks absent. To see it in development,
+set the country yourself:
+
+```js
+document.cookie = "whealth-dev-country=JP; path=/"   // then reload
+```
+
+That cookie is read only when `NODE_ENV !== "production"`. If geolocation
+seems not to work in a real deployment, the usual cause is the opposite
+problem: a **manual** choice is already stored, and a choice outranks a
+suggestion forever. Clear it with:
+
+```js
+document.cookie = "whealth-currency=; path=/; max-age=0"   // then reload
+```
+
 Headers a browser could set itself are deliberately not read.
 
 ## Which currency wins

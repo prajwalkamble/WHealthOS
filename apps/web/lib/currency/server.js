@@ -28,9 +28,39 @@ import { DEFAULT_CURRENCY } from "./registry.js";
 /**
  * @returns {Promise<{currency: string, source: string, country: string|null, detected: boolean}>}
  */
+// A country to pretend the request came from, for development only.
+//
+// The country header is put there by the edge, so on localhost there is none
+// and every visitor resolves to the application default -- which makes the
+// geolocation behaviour impossible to see, and easy to mistake for broken.
+// Setting this cookie supplies one:
+//
+//   document.cookie = "whealth-dev-country=JP; path=/"
+//
+// Guarded on NODE_ENV so it cannot exist in a production build. Even if it
+// could, the worst it achieves is showing the person who set it a different
+// currency: it decides formatting, never what anything is worth, and never
+// what anybody is charged.
+const DEV_COUNTRY_COOKIE = "whealth-dev-country";
+
+const withDevCountry = (headerList, country) => {
+  if (!country) return headerList;
+  return {
+    get: (name) =>
+      name.toLowerCase() === "x-vercel-ip-country"
+        ? country
+        : headerList.get(name),
+  };
+};
+
 export const currentCurrency = cache(async function currentCurrency() {
-  const [cookieStore, headerList] = await Promise.all([cookies(), headers()]);
+  const [cookieStore, rawHeaders] = await Promise.all([cookies(), headers()]);
   const cookie = cookieStore.get(CURRENCY_COOKIE)?.value ?? null;
+
+  const headerList =
+    process.env.NODE_ENV === "production"
+      ? rawHeaders
+      : withDevCountry(rawHeaders, cookieStore.get(DEV_COUNTRY_COOKIE)?.value);
 
   // The account's saved preference, when there is an account. A signed-out
   // visitor never touches the database for this.
