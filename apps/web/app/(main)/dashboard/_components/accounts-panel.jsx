@@ -79,7 +79,7 @@ const AccountsPanel = ({ accounts, guest = false }) => {
                     <div className="flex items-center gap-2 truncate text-sm font-medium capitalize">
                       {account.name}
                       {account.isDefault && (
-                        <Badge variant="secondary" className="h-5 text-[10px]">
+                        <Badge variant="secondary" className="h-5 text-xs font-normal">
                           Default
                         </Badge>
                       )}

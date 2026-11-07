@@ -89,7 +89,7 @@ export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", multiplier 
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground",
+          "inline-flex items-center gap-1 text-xs font-medium text-muted-foreground",
           className
         )}
       >
@@ -103,15 +103,20 @@ export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", multiplier 
   const good = flat || (value > 0) === goodWhenUp;
   const Icon = flat ? Minus : value > 0 ? TrendingUp : TrendingDown;
 
+  // No pill. Four filled red and green capsules across the top of a
+  // dashboard are four things competing with the figures they annotate, and
+  // the figures are what the page is for. The arrow carries the direction,
+  // the colour carries whether it is good news, and neither needs a border
+  // and a tinted ground to be read.
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums",
+        "inline-flex items-center gap-1 text-xs font-medium tabular-nums",
         flat
           ? "text-muted-foreground"
           : good
-            ? "border-green-600/30 bg-green-500/5 text-green-700 dark:border-green-400/30 text-positive"
-            : "border-red-600/30 bg-red-500/5 text-red-700 dark:border-red-400/30 text-negative",
+            ? "text-positive"
+            : "text-negative",
         className
       )}
     >
@@ -140,10 +145,15 @@ export const SERIES_COLORS = [
   "hsl(var(--chart-3))",
 ];
 
+// StatusBadge keeps its outline where TrendBadge dropped one: these say
+// "Get started" or "First month", so they are tags standing in for a figure
+// rather than an annotation on one, and the border is what marks them as a
+// state rather than a stray word. No tinted fill, and the colour comes from
+// the semantic tokens so the pair cannot drift apart again.
 const PILL_TONES = {
-  good: "border-green-600/30 bg-green-500/5 text-green-700 dark:border-green-400/30 text-positive",
-  warn: "border-amber-600/30 bg-amber-500/5 text-amber-700 dark:border-amber-400/30 dark:text-amber-400",
-  bad: "border-red-600/30 bg-red-500/5 text-red-700 dark:border-red-400/30 text-negative",
+  good: "border-positive/40 text-positive",
+  warn: "border-caution/40 text-caution",
+  bad: "border-negative/40 text-negative",
   neutral: "text-muted-foreground",
 };
 

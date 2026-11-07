@@ -11,7 +11,7 @@ import {
   Widget,
   WidgetHeader,
 } from "@/components/dashboard/widget";
-import { categoryColors, defaultCategories } from "@/data/categories";
+import { defaultCategories } from "@/data/categories";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/components/currency-provider";
 
@@ -75,14 +75,13 @@ const RecentTransactions = ({
                   <tr key={transaction.id} className="transition-colors hover:bg-muted/40">
                     <td className="max-w-0 px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <span
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                          style={{
-                            backgroundColor:
-                              categoryColors[transaction.category] ??
-                              "hsl(var(--muted-foreground))",
-                          }}
-                        >
+                        {/* One neutral badge rather than a different
+                            saturated hue per row. Eight rows in eight
+                            colours is the loudest thing on the page, and
+                            none of those colours encodes anything a reader
+                            needs here -- the category is written directly
+                            underneath. */}
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
                           {initialOf(label)}
                         </span>
                         <div className="min-w-0">

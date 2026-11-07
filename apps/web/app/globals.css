@@ -56,6 +56,7 @@
        clear 4.5:1 in both themes; see docs/design-tokens.md for the figures. */
     --positive: 142 72% 29%;
     --negative: 0 74% 42%;
+    --caution: 32 90% 34%;
     /* Shadow tints. Constants, not theme values: declared once here and
        inherited by .dark, which overrides none of them. They exist so the
        Floor's "no colour literal past the token block" holds for the two
@@ -121,6 +122,7 @@
     --ring: 220 9% 72%;
     --positive: 142 62% 62%;
     --negative: 0 85% 72%;
+    --caution: 38 92% 62%;
     /* The default greys, mirrored: pale first, so the strongest series is
        still the most visible one on the dark surface. */
     --chart-1: 0 0% 92%;

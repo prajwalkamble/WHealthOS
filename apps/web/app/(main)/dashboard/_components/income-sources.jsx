@@ -16,7 +16,7 @@ import {
   WidgetHeader,
   percentChange,
 } from "@/components/dashboard/widget";
-import { categoryColors, defaultCategories } from "@/data/categories";
+import { defaultCategories } from "@/data/categories";
 import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
@@ -40,7 +40,12 @@ const IncomeSources = ({ rows, total, previousTotal }) => {
     // cyan, Investments indigo, Business pink, Rental amber, Other slate --
     // so a segment is recognisable at a glance in the bar and the list.
     color:
-      categoryColors[row.category] ?? SERIES_COLORS[index % SERIES_COLORS.length],
+      // The chart ramp, not the category hue. The donut opposite already
+      // draws expenses from SERIES_COLORS, so income arriving in saturated
+      // green, cyan and violet made the two halves of the same row look
+      // like two different products. The category keeps its own colour
+      // where it identifies a row rather than a series: the table.
+      SERIES_COLORS[index % SERIES_COLORS.length],
   }));
 
   return (

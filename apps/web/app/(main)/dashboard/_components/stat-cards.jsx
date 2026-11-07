@@ -23,10 +23,18 @@ import { cn } from "@/lib/utils";
 // data-figure is a presentational hook, not behaviour: it gives the landing
 // page's walkthrough a stable handle on the number so it can count it up
 // without re-rendering the card, and gives tests something to assert on.
-const Figure = ({ value, tone }) => (
+// `lead` is the balance. Four figures at one size is four things asking to
+// be read first, which on a page whose job is "where do I stand" means none
+// of them answers it. The balance is the answer; the other three explain it,
+// so they are set a step down and the eye has somewhere to land.
+const Figure = ({ value, tone, lead = false }) => (
   <div
     data-figure
-    className={cn("text-3xl font-bold tracking-tight tabular-nums", tone)}
+    className={cn(
+      "font-bold tracking-tight tabular-nums",
+      lead ? "text-4xl sm:text-5xl" : "text-lg sm:text-xl lg:text-2xl",
+      tone
+    )}
   >
     {value}
   </div>
@@ -238,11 +246,19 @@ const StatCards = ({ summary, accountCount, hasTransactions, guest = false }) =>
   });
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-      <Widget>
+    // Five tracks: the balance takes two and the three supporting figures
+    // share the other three, so the hierarchy is in the layout as well as in
+    // the type. They sit in a grid of their own rather than as three cells of
+    // the outer one, because at two columns the odd card left a hole in the
+    // row; this way they go three-up from sm and stack only on a phone --
+    // where four full-height cards used to cost two screens before any of
+    // the actual content.
+    <div className="grid gap-6 2xl:grid-cols-5">
+      <Widget className="2xl:col-span-2">
         <WidgetHeader title="Total Balance" action={balance.badge} />
         <WidgetContent>
           <Figure
+            lead
             value={formatCurrency(totalBalance)}
             tone={totalBalance < 0 ? "text-negative" : undefined}
           />
@@ -260,36 +276,49 @@ const StatCards = ({ summary, accountCount, hasTransactions, guest = false }) =>
         </WidgetContent>
       </Widget>
 
-      <Widget>
-        <WidgetHeader title="Income" action={income.badge} />
-        <WidgetContent>
-          <Figure value={formatCurrency(monthlyIncome)} />
-          <Caption>{income.caption}</Caption>
-        </WidgetContent>
-      </Widget>
+      {/* Two up, going three up only at lg. Stacked, these three cost a
+          screen and a half before the reader reached a single chart; paired,
+          the whole summary is one screen. The odd one takes the full width
+          rather than leaving a hole beside it.
+          
+          Three up from sm looked right until it met the app shell: the
+          sidebar takes 256px, so a 768px tablet leaves about 490px for the
+          row and each card came out near 170px -- narrow enough to clip the
+          rupee figure and push the badge onto the title. The breakpoint has
+          to answer the width the content actually gets, not the width of
+          the window. */}
+      <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3 2xl:col-span-3">
+        <Widget>
+          <WidgetHeader title="Income" action={income.badge} />
+          <WidgetContent>
+            <Figure value={formatCurrency(monthlyIncome)} />
+            <Caption>{income.caption}</Caption>
+          </WidgetContent>
+        </Widget>
 
-      <Widget>
-        <WidgetHeader title="Expenses" action={expenses.badge} />
-        <WidgetContent>
-          <Figure value={formatCurrency(monthlyExpenses)} />
-          <Caption>{expenses.caption}</Caption>
-        </WidgetContent>
-      </Widget>
+        <Widget>
+          <WidgetHeader title="Expenses" action={expenses.badge} />
+          <WidgetContent>
+            <Figure value={formatCurrency(monthlyExpenses)} />
+            <Caption>{expenses.caption}</Caption>
+          </WidgetContent>
+        </Widget>
 
-      <Widget>
-        <WidgetHeader title="Savings Rate" action={savings.badge} />
-        <WidgetContent>
-          <Figure
-            value={savingsRate === null ? "—" : `${savingsRate.toFixed(1)}%`}
-            tone={
-              savingsRate !== null && savingsRate < 0
-                ? "text-negative"
-                : undefined
-            }
-          />
-          <Caption>{savings.caption}</Caption>
-        </WidgetContent>
-      </Widget>
+        <Widget className="col-span-2 lg:col-span-1">
+          <WidgetHeader title="Savings Rate" action={savings.badge} />
+          <WidgetContent>
+            <Figure
+              value={savingsRate === null ? "—" : `${savingsRate.toFixed(1)}%`}
+              tone={
+                savingsRate !== null && savingsRate < 0
+                  ? "text-negative"
+                  : undefined
+              }
+            />
+            <Caption>{savings.caption}</Caption>
+          </WidgetContent>
+        </Widget>
+      </div>
     </div>
   );
 };

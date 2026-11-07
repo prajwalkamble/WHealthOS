@@ -121,11 +121,17 @@ const CategoryDonut = ({ title, rows, emptyLabel }) => {
               </PieChart>
             </ChartContainer>
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* Rows, not tiles. These were bordered, tinted boxes inside a
+                bordered card -- a second containment layer that made the
+                card look like a tray of smaller cards and set the legend
+                competing with the chart it belongs to. Divided rows read as
+                part of the widget, and match the income list opposite, so
+                the two halves of the row finally share a language. */}
+            <div className="grid grid-cols-2 gap-x-6">
               {tiles.map((tile) => (
                 <div
                   key={tile.key}
-                  className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm"
+                  className="flex items-center gap-2 py-2 text-sm"
                 >
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"

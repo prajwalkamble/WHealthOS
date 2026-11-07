@@ -47,6 +47,7 @@ const config = {
   			// -- which is how 13 files ended up printing amounts at 3.30:1.
   			positive: 'hsl(var(--positive))',
   			negative: 'hsl(var(--negative))',
+  			caution: 'hsl(var(--caution))',
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
