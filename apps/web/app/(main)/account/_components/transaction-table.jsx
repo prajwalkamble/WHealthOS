@@ -355,12 +355,22 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                     </TableCell>
                   )}
                   <TableCell className="capitalize">
-                    <span
-                      style={{
-                        backgroundColor: categoryColors[transaction.category],
-                      }}
-                      className="px-2 py-1 rounded text-white text-sm"
-                    >
+                    {/* The category hue used to be this chip's background with
+                        white text on top of it. 19 of the 21 categories failed
+                        4.5:1 that way -- healthcare worst, at 2.49:1 -- which
+                        put the least readable text in the table on the column
+                        a user scans to find a row. The hue still identifies
+                        the category; it just no longer has to carry the text
+                        sitting on it, and it stays the series colour in the
+                        charts, where nothing is written over it. */}
+                    <span className="inline-flex items-center gap-1.5 rounded bg-muted px-2 py-1 text-sm text-foreground">
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: categoryColors[transaction.category],
+                        }}
+                      />
                       {transaction.category}
                     </span>
                   </TableCell>
@@ -368,8 +378,8 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                     className={cn(
                       "text-right font-medium",
                       transaction.type === "EXPENSE"
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-green-600 dark:text-green-400"
+                        ? "text-negative"
+                        : "text-positive"
                     )}
                   >
                     {transaction.type === "EXPENSE" ? "-" : "+"}

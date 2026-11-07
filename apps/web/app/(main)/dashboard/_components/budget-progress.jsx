@@ -182,11 +182,15 @@ const BudgetProgress = ({
           aria-valuemin={0}
           aria-valuemax={100}
         >
+          {/* scaleX, not width: animating width relays out the row on every
+              frame, and the Floor bans it for that reason. The bar is a solid
+              fill, so a horizontal scale is pixel-identical to the width it
+              replaces. origin-left keeps it growing from the correct end. */}
           <div
-            className={`h-full transition-all duration-500 ${
-              overBudget ? "bg-red-500" : "bg-primary/55"
+            className={`h-full w-full origin-left transition-[transform,background-color] duration-500 ${
+              overBudget ? "bg-negative" : "bg-primary/55"
             }`}
-            style={{ width: `${fillWidth}%` }}
+            style={{ transform: `scaleX(${fillWidth / 100})` }}
           />
         </div>
 

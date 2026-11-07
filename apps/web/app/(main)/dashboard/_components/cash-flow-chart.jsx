@@ -134,7 +134,7 @@ const CashFlowChart = ({ months }) => {
             <p
               className={cn(
                 "text-2xl font-bold tracking-tight tabular-nums",
-                net < 0 && "text-red-600 dark:text-red-400"
+                net < 0 && "text-negative"
               )}
             >
               {formatCurrency(net)}
@@ -190,9 +190,9 @@ const CashFlowChart = ({ months }) => {
             <>
               Trending {trend >= 0 ? "up" : "down"} by {Math.abs(trend).toFixed(1)}% this month
               {trend >= 0 ? (
-                <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <TrendingUp className="h-4 w-4 text-positive" />
               ) : (
-                <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <TrendingDown className="h-4 w-4 text-negative" />
               )}
             </>
           )}

@@ -90,7 +90,7 @@ export function NumberField({
         </p>
       )}
       {error && (
-        <p id={errorId} className="text-xs font-medium text-red-600 dark:text-red-400">
+        <p id={errorId} className="text-xs font-medium text-negative">
           {error}
         </p>
       )}
@@ -170,7 +170,7 @@ export function PrimaryResult({ label, value, caption, tone = "default" }) {
         className={cn(
           "mt-1 text-3xl font-bold tracking-tight sm:text-4xl",
           tone === "positive" && "text-emerald-600 dark:text-emerald-400",
-          tone === "negative" && "text-red-600 dark:text-red-400"
+          tone === "negative" && "text-negative"
         )}
       >
         {value}
@@ -193,7 +193,7 @@ export function Metrics({ items }) {
             className={cn(
               "mt-1 truncate text-lg font-semibold",
               item.tone === "positive" && "text-emerald-600 dark:text-emerald-400",
-              item.tone === "negative" && "text-red-600 dark:text-red-400"
+              item.tone === "negative" && "text-negative"
             )}
             title={typeof item.value === "string" ? item.value : undefined}
           >

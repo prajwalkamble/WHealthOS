@@ -244,7 +244,7 @@ const StatCards = ({ summary, accountCount, hasTransactions, guest = false }) =>
         <WidgetContent>
           <Figure
             value={formatCurrency(totalBalance)}
-            tone={totalBalance < 0 ? "text-red-600 dark:text-red-400" : undefined}
+            tone={totalBalance < 0 ? "text-negative" : undefined}
           />
           <Caption>{balance.caption}</Caption>
           {/* Adding a transaction has its own button in the page header, so
@@ -283,7 +283,7 @@ const StatCards = ({ summary, accountCount, hasTransactions, guest = false }) =>
             value={savingsRate === null ? "—" : `${savingsRate.toFixed(1)}%`}
             tone={
               savingsRate !== null && savingsRate < 0
-                ? "text-red-600 dark:text-red-400"
+                ? "text-negative"
                 : undefined
             }
           />

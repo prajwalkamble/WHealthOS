@@ -98,13 +98,13 @@ export function AccountChart ({ dailyTotals }) {
         <div className="flex justify-around mb-6 text-sm">
           <div className="text-center">
             <p className="text-muted-foreground">Total Income</p>
-            <p className="text-lg font-bold text-green-600 dark:text-green-400">
+            <p className="text-lg font-bold text-positive">
               {formatCurrency(totals.income)}
             </p>
           </div>
           <div className="text-center">
             <p className="text-muted-foreground">Total Expenses</p>
-            <p className="text-lg font-bold text-red-600 dark:text-red-400">
+            <p className="text-lg font-bold text-negative">
               {formatCurrency(totals.expense)}
             </p>
           </div>
@@ -113,8 +113,8 @@ export function AccountChart ({ dailyTotals }) {
             <p
               className={`text-lg font-bold ${
                 totals.income - totals.expense >= 0
-                  ? "text-green-600 dark:text-green-400"
-                  : "text-red-600 dark:text-red-400"
+                  ? "text-positive"
+                  : "text-negative"
               }`}
             >
               {formatCurrency(totals.income - totals.expense)}

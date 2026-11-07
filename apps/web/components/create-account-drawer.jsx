@@ -74,7 +74,7 @@ const CreateAccountDrawer = ({ children, onCreated }) => {
                 {...register("name")}
               />
               {errors.name && (
-                <p className="text-sm text-red-600">{errors.name.message}</p>
+                <p className="text-sm text-negative">{errors.name.message}</p>
               )}
             </div>
             <div className="space-y-2">
@@ -94,7 +94,7 @@ const CreateAccountDrawer = ({ children, onCreated }) => {
                 </SelectContent>
               </Select>
               {errors.type && (
-                <p className="text-sm text-red-600">{errors.type.message}</p>
+                <p className="text-sm text-negative">{errors.type.message}</p>
               )}
             </div>
 
@@ -110,7 +110,7 @@ const CreateAccountDrawer = ({ children, onCreated }) => {
                 {...register("balance")}
               />
               {errors.balance && (
-                <p className="text-sm text-red-600">{errors.balance.message}</p>
+                <p className="text-sm text-negative">{errors.balance.message}</p>
               )}
             </div>
 

@@ -320,7 +320,7 @@ export function ImportDrawer({ children, accounts = [], defaultAccountId = null 
 
                   {failure && (
                     <p
-                      className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm text-red-600 dark:text-red-400"
+                      className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-500/5 p-3 text-sm text-negative"
                       role="alert"
                     >
                       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -350,7 +350,7 @@ export function ImportDrawer({ children, accounts = [], defaultAccountId = null 
                           </Stat>
                         )}
                         {counts.invalid > 0 && (
-                          <Stat icon={AlertTriangle} tone="text-red-600 dark:text-red-400">
+                          <Stat icon={AlertTriangle} tone="text-negative">
                             {counts.invalid} need attention
                           </Stat>
                         )}
@@ -502,7 +502,7 @@ function ColumnMapping({ headers, columns, onChange }) {
             <div key={field} className="space-y-1.5">
               <label htmlFor={`map-${field}`} className="text-sm font-medium">
                 {label}
-                {required && <span className="text-red-600 dark:text-red-400"> *</span>}
+                {required && <span className="text-negative"> *</span>}
                 {note && (
                   <span className="font-normal text-muted-foreground"> — {note}</span>
                 )}
@@ -634,7 +634,7 @@ function PreviewTable({ rows, accounts, total }) {
                 <td
                   className={
                     row.type === "EXPENSE"
-                      ? "whitespace-nowrap px-3 py-2 text-right text-red-600 dark:text-red-400"
+                      ? "whitespace-nowrap px-3 py-2 text-right text-negative"
                       : "whitespace-nowrap px-3 py-2 text-right text-emerald-600 dark:text-emerald-400"
                   }
                 >

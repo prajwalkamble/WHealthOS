@@ -29,7 +29,10 @@ const DemoHeader = ({ onReset, addedCount = 0 }) => {
 
       <Separator orientation="vertical" className="hidden h-4 sm:block" />
 
-      <p className="hidden truncate text-sm text-muted-foreground sm:block">
+      {/* min-w-0: a flex item will not shrink below its content without it, so
+          `truncate` did nothing and this sentence pushed the controls to its
+          right off the screen -- 831px of content in a 768px tablet. */}
+      <p className="hidden min-w-0 truncate text-sm text-muted-foreground sm:block">
         You&rsquo;re exploring WHealthOS with sample data.
       </p>
 

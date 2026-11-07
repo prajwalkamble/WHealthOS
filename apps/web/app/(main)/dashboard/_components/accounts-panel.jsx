@@ -92,7 +92,7 @@ const AccountsPanel = ({ accounts, guest = false }) => {
                   <span
                     className={cn(
                       "shrink-0 text-sm font-semibold tabular-nums",
-                      account.balance < 0 && "text-red-600 dark:text-red-400"
+                      account.balance < 0 && "text-negative"
                     )}
                   >
                     {formatCurrency(account.balance)}

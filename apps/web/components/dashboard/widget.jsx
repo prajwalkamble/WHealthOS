@@ -110,8 +110,8 @@ export const TrendBadge = ({ value, goodWhenUp = true, suffix = "%", multiplier 
         flat
           ? "text-muted-foreground"
           : good
-            ? "border-green-600/30 bg-green-500/5 text-green-700 dark:border-green-400/30 dark:text-green-400"
-            : "border-red-600/30 bg-red-500/5 text-red-700 dark:border-red-400/30 dark:text-red-400",
+            ? "border-green-600/30 bg-green-500/5 text-green-700 dark:border-green-400/30 text-positive"
+            : "border-red-600/30 bg-red-500/5 text-red-700 dark:border-red-400/30 text-negative",
         className
       )}
     >
@@ -141,9 +141,9 @@ export const SERIES_COLORS = [
 ];
 
 const PILL_TONES = {
-  good: "border-green-600/30 bg-green-500/5 text-green-700 dark:border-green-400/30 dark:text-green-400",
+  good: "border-green-600/30 bg-green-500/5 text-green-700 dark:border-green-400/30 text-positive",
   warn: "border-amber-600/30 bg-amber-500/5 text-amber-700 dark:border-amber-400/30 dark:text-amber-400",
-  bad: "border-red-600/30 bg-red-500/5 text-red-700 dark:border-red-400/30 dark:text-red-400",
+  bad: "border-red-600/30 bg-red-500/5 text-red-700 dark:border-red-400/30 text-negative",
   neutral: "text-muted-foreground",
 };
 

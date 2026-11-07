@@ -166,8 +166,8 @@ const GlobalSearch = ({ className }) => {
                     className={cn(
                       "shrink-0 tabular-nums",
                       transaction.type === "INCOME"
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
+                        ? "text-positive"
+                        : "text-negative"
                     )}
                   >
                     {transaction.type === "INCOME" ? "+" : "-"}

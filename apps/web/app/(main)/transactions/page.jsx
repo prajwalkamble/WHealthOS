@@ -36,7 +36,7 @@ export default async function TransactionsPage() {
           <p
             className={
               failed
-                ? "text-sm text-red-600 dark:text-red-400"
+                ? "text-sm text-negative"
                 : "text-sm text-muted-foreground"
             }
           >

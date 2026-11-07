@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const SEEN_KEY = "whealth-notifications-seen";
 
 const ICONS = {
-  alert: { icon: AlertTriangle, tone: "text-red-600 dark:text-red-400" },
+  alert: { icon: AlertTriangle, tone: "text-negative" },
   warning: { icon: TriangleAlert, tone: "text-amber-600 dark:text-amber-400" },
   info: { icon: Info, tone: "text-blue-600 dark:text-blue-400" },
 };

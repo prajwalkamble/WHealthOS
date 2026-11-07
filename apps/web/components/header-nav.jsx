@@ -231,7 +231,7 @@ const HeaderNav = ({ className }) => {
                     to be a feature of its own. It fades and rises 2px, which
                     is the smallest movement that reads as "this came from the
                     trigger"; motion-reduce drops the rise. */}
-                <div className="overflow-hidden rounded-2xl border border-border/60 bg-popover/95 p-2 text-popover-foreground shadow-[0_12px_32px_-16px_hsl(222_47%_11%/0.35)] backdrop-blur-md backdrop-saturate-150 animate-in fade-in-0 slide-in-from-top-1 duration-200 motion-reduce:animate-none">
+                <div className="overflow-hidden rounded-2xl border border-border/60 bg-popover/95 p-2 text-popover-foreground shadow-panel backdrop-blur-md backdrop-saturate-150 animate-in fade-in-0 slide-in-from-top-1 duration-200 motion-reduce:animate-none">
                   {items.map((item) =>
                     item.href ? (
                       <PrefetchLink

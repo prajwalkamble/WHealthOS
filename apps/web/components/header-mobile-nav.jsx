@@ -58,7 +58,7 @@ const HeaderMobileNav = ({ nav = [], showDemoLink = false }) => {
           hairline border, the same glass. max-h with its own scroll so a long
           menu cannot run off the bottom of a short phone. */}
       {open && (
-        <div className="absolute inset-x-0 top-full mt-2 max-h-[calc(100vh-var(--header-space)-1.5rem)] overflow-y-auto rounded-2xl border border-border/60 bg-background/95 shadow-[0_12px_32px_-16px_hsl(222_47%_11%/0.35)] backdrop-blur-md backdrop-saturate-150 lg:hidden">
+        <div className="absolute inset-x-0 top-full mt-2 max-h-[calc(100vh-var(--header-space)-1.5rem)] overflow-y-auto rounded-2xl border border-border/60 bg-background/95 shadow-panel backdrop-blur-md backdrop-saturate-150 lg:hidden">
           <div className="flex flex-col gap-0.5 px-4 py-3">
             {/* No hover on a touch screen, so a section's children are simply
                 listed under it rather than hidden behind a dropdown. */}

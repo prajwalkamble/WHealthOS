@@ -107,8 +107,8 @@ const RecentTransactions = ({
                       className={cn(
                         "whitespace-nowrap px-5 py-3 text-right font-semibold tabular-nums",
                         income
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
+                          ? "text-positive"
+                          : "text-negative"
                       )}
                     >
                       {income ? "+" : "-"}

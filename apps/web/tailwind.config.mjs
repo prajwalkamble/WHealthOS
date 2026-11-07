@@ -42,6 +42,11 @@ const config = {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			// Money direction. Named for what it means, not what colour it is,
+  			// so a figure is never styled by reaching into Tailwind's palette
+  			// -- which is how 13 files ended up printing amounts at 3.30:1.
+  			positive: 'hsl(var(--positive))',
+  			negative: 'hsl(var(--negative))',
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -59,6 +64,10 @@ const config = {
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
   			}
+  		},
+  		boxShadow: {
+  			// The floating nav panel and the mobile menu share one lift.
+  			panel: '0 12px 32px -16px hsl(var(--shadow-slate) / 0.35)'
   		},
   		borderRadius: {
   			// All of these follow --radius, which the Radius setting changes.
