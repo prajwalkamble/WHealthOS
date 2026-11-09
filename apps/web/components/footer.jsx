@@ -65,8 +65,18 @@ const PRODUCT_LINKS = [
   { label: "Analytics", href: "/analytics" },
 ];
 
-// What someone can use without an account: the demo, and the calculators.
-const RESOURCE_LINKS = [{ label: "Live Demo", href: "/demo" }, ...TOOL_LINKS];
+// What someone can use without an account, minus the calculators: those now
+// have a column of their own beside this one, by instruction. Eleven entries
+// under one "Resources" heading read as a list of pages rather than as two
+// different offers -- the demo is the product on sample data, the tools are
+// standalone calculators that answer one question each and need nothing.
+//
+// It leaves one link here, and that is the honest shape: /demo is the only
+// resource WHealthOS has that is not either a company page, a legal document
+// or a tool. Documentation, a help centre and a changelog would fill the
+// column and none of them exist. Blog is a resource too, but it heads the
+// Company group and two tests hold it there -- see company-pages.test.js.
+const RESOURCE_LINKS = [{ label: "Live Demo", href: "/demo" }];
 
 // The five trust documents, each read from its own module rather than typed as
 // a route here -- the same reason the Tools entries are generated.
@@ -84,6 +94,7 @@ const LINK_COLUMNS = [
   { title: "Company", links: [...COMPANY_NAV, ...COMPANY_CONTENT_LINKS] },
   { title: "Product", links: PRODUCT_LINKS },
   { title: "Resources", links: RESOURCE_LINKS },
+  { title: "Tools", links: TOOL_LINKS },
 ];
 
 // One link style for the whole footer. py-1.5 is the tap target, not
@@ -158,11 +169,15 @@ const Footer = () => {
 
         <div className="border-t" />
 
-        {/* B. Five columns: brand, three link groups, company information. The
-            proportions are the reference's own -- the brand and the
-            information column are wider than the three in between. */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-10 py-10 sm:gap-x-8 lg:grid-cols-[1.15fr_0.85fr_0.95fr_0.95fr_1.1fr] lg:gap-x-10 lg:py-14">
-          <div className="col-span-2 lg:col-span-1">
+        {/* B. Six columns: brand, four link groups, company information. The
+            proportions follow the reference -- the brand and the information
+            column are wider than the groups between them -- with the tracks
+            re-cut for the fourth group. Resources is the narrowest because it
+            holds one short label; Product and Tools are the widest of the four
+            because "Transactions" and "Financial Runway" are the longest
+            labels in the footer and neither should wrap. */}
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 py-10 sm:grid-cols-3 sm:gap-x-8 lg:grid-cols-[1.05fr_0.8fr_0.9fr_0.68fr_0.92fr_1fr] lg:gap-x-9 lg:py-14">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-1">
             <Link
               href="/"
               className="inline-flex items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

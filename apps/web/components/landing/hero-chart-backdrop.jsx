@@ -1,3 +1,8 @@
+import {
+  HeroChartAxisLabels,
+  HeroChartCalloutFigures,
+} from "./hero-chart-figures";
+
 // The hero's background: one financial chart, behind the copy.
 //
 // A server component with no JavaScript of its own, and no motion: it draws
@@ -73,19 +78,62 @@ const AREA = `${PATH} L1440 ${HEIGHT} L0 ${HEIGHT} Z`;
 
 // The value axis. 1.5L at the top through 0 at the bottom, evenly spaced --
 // the reference's own ladder, and the range the demo's own figures sit inside.
-const AXIS = [
-  [60, "₹1.5L"],
-  [136, "₹1.2L"],
-  [212, "₹90K"],
-  [288, "₹60K"],
-  [364, "₹30K"],
-  [440, "₹0"],
-].map(([y, label]) => [vy(y), label]);
+//
+// The amounts are written in INR, like every other sample figure in this
+// application, and converted for display. They used to be six hardcoded
+// strings with a rupee sign baked into each, which was fine while the whole
+// page was in rupees; it stopped being fine the moment the dashboard a few
+// hundred pixels below started answering in the visitor's own currency, because
+// then the only thing on the first screen still insisting on rupees was the
+// drawing behind the headline.
+const AXIS_BASE = [
+  [60, 150000],
+  [136, 120000],
+  [212, 90000],
+  [288, 60000],
+  [364, 30000],
+  [440, 0],
+];
 
-// The vertical guides, at the reference's spacing, and how far they run.
-const GUIDES = [264, 534, 800, 1068, 1335];
-const GUIDE_TOP = vy(48);
-const GUIDE_BOTTOM = vy(460);
+// Where the rungs sit. Geometry only: the gridlines and their ticks are drawn
+// from this and never from the labels, because the ladder's position does not
+// depend on which currency the labels are written in.
+const AXIS_Y = AXIS_BASE.map(([y]) => vy(y));
+
+// The same rungs with their amounts, handed to the client component that
+// converts and formats them. The amounts are in the currency the sample
+// figures are written in; nothing here decides what they are worth.
+const AXIS_RUNGS = AXIS_BASE.map(([y, value]) => [vy(y), value]);
+
+// The vertical rules, and what decides where they fall.
+//
+// They used to be five lines at the reference's own spacing -- 264, 534, 800,
+// 1068, 1335 -- which is a rhythm with nothing behind it: no element on the
+// page begins or ends on any of them. Five arbitrary verticals behind a hero
+// read as texture applied to the page rather than as the page having
+// structure.
+//
+// They are now a twelve-column measure on the drawing's own frame, cut to the
+// same proportions the content is: a 48px margin either side of 1440, then
+// twelve equal columns. Near 1440 the outer two land within about two pixels
+// of where the headline, the buttons and the dashboard all begin and end;
+// above 1408 the shell stops growing while this frame keeps scaling, so the
+// two drift apart and the field reads as a measure rather than as a match.
+// That is the whole of the idea either way -- the background is a ruler, not
+// a texture, drawn faintly enough to be felt rather than read.
+const SHELL_MARGIN = 48;
+const COLUMNS = 12;
+const COLUMN_WIDTH = (1440 - SHELL_MARGIN * 2) / COLUMNS;
+const GUIDES = Array.from(
+  { length: COLUMNS + 1 },
+  (_, i) => SHELL_MARGIN + i * COLUMN_WIDTH
+);
+// The outer two are the content's own edges and run the full height; the
+// interior ones stop short of the baseline so the field reads as a grid under
+// the drawing rather than as a fence in front of it.
+const GUIDE_TOP = vy(30);
+const GUIDE_BOTTOM = vy(470);
+const isEdge = (x) => x === GUIDES[0] || x === GUIDES[GUIDES.length - 1];
 
 // The highlighted point, which is a vertex of PATH and not a position of its
 // own -- if the path changes, this has to move with it.
@@ -96,6 +144,14 @@ const POINT = { x: 1272, y: vy(192) };
 const CALLOUT = { x: 1120, y: vy(30), w: 296, h: 62 };
 
 const HeroChartBackdrop = () => {
+  // Not money, so it stays on the server: the month the page is being read in.
+  // The card used to be dated 28 Feb 2025, which was the month the reference
+  // mockup was made and is now two years in the past.
+  const month = new Intl.DateTimeFormat("en-GB", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
+
   return (
     // aria-hidden and pointer-events-none: decoration. It carries no
     // information the copy does not, and it must never take a click meant for
@@ -211,7 +267,7 @@ const HeroChartBackdrop = () => {
             here: they give the line something to be read against and should
             not themselves be noticed. */}
         <g className="hero-chart-grid">
-          {AXIS.map(([y]) => (
+          {AXIS_Y.map((y) => (
             <line
               key={y}
               x1="0"
@@ -223,15 +279,19 @@ const HeroChartBackdrop = () => {
           ))}
         </g>
 
-        {/* Vertical guides, dashed. */}
+        {/* The column rules. The two at the content's own edges are solid and
+            run the full height; the ten between them are dashed and stop
+            short, so the eye reads one frame with a measure inside it rather
+            than twelve equal fence posts. */}
         <g className="hero-chart-guide">
           {GUIDES.map((x) => (
             <line
               key={x}
+              className={isEdge(x) ? "hero-chart-edge" : undefined}
               x1={x}
-              y1={GUIDE_TOP}
+              y1={isEdge(x) ? 0 : GUIDE_TOP}
               x2={x}
-              y2={GUIDE_BOTTOM}
+              y2={isEdge(x) ? HEIGHT : GUIDE_BOTTOM}
               stroke="url(#hero-chart-grid-fade)"
             />
           ))}
@@ -241,7 +301,7 @@ const HeroChartBackdrop = () => {
             the framings above. */}
         <g className="hidden lg:inline">
           <g className="hero-chart-grid">
-            {AXIS.map(([y]) => (
+            {AXIS_Y.map((y) => (
               <line
                 key={y}
                 x1="28"
@@ -253,11 +313,7 @@ const HeroChartBackdrop = () => {
             ))}
           </g>
           <g className="hero-chart-axis-label">
-            {AXIS.map(([y, label]) => (
-              <text key={y} x="58" y={y} dominantBaseline="middle">
-                {label}
-              </text>
-            ))}
+            <HeroChartAxisLabels rungs={AXIS_RUNGS} />
           </g>
         </g>
 
@@ -321,14 +377,13 @@ const HeroChartBackdrop = () => {
               this will not always agree with it. The axis up the left is
               decoration on the same terms. None of it is anyone's money. */}
           <text className="hero-chart-callout-label" x="1146" y={CALLOUT.y + 22}>
-            28 Feb 2025
+            {month}
           </text>
-          <text className="hero-chart-callout-value" x="1146" y={CALLOUT.y + 48}>
-            ₹1,08,215.00
-          </text>
-          <text className="hero-chart-callout-change" x="1288" y={CALLOUT.y + 48}>
-            +₹5,420 (+5.3%)
-          </text>
+          <HeroChartCalloutFigures
+            x={1146}
+            changeX={1288}
+            y={CALLOUT.y + 48}
+          />
         </g>
       </svg>
     </div>

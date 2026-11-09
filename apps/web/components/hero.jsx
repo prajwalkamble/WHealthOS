@@ -16,18 +16,19 @@ import { cn } from "@/lib/utils";
 // rendered against demo data and walked through by a GSAP timeline. It is a
 // client island; the rest of the hero stays server-rendered.
 //
-// The background is one financial chart and nothing else -- no slab, no tint,
-// no second surface. An earlier pass did put a dark navy-to-purple slab here
-// and it was removed on instruction: the page keeps its own background. That
-// still holds. HeroChartBackdrop paints no background colour of any kind; it
-// draws a line, a wash beneath that line, a grid and one highlighted point
-// straight onto the page's ordinary surface, which is why the copy below is
-// still in its ordinary ink.
-//
 // Stacked rather than side by side: the walkthrough renders the application's
 // real sidebar plus a three-column grid of panels, and in a half-width column
 // the transaction names truncate and the cash-flow axis labels collide. It
 // needs the full content width, and the copy reads perfectly well above it.
+// The draw asked for a Settled hero (text on six columns, visual on the other
+// six); the material refuses it for that reason, so the posture is the same
+// idea stacked -- a short centred head over a full-bleed product visual that
+// breaks the fold, which is what puts the product on the first screen.
+//
+// The figures in the walkthrough are in the visitor's own currency. The
+// CurrencyProvider that does it is mounted by app/(marketing)/page.jsx, around
+// the whole page rather than around this component, so the hero's demo and the
+// Solutions panels further down agree with each other.
 const HeroSection = () => {
   return (
     // The positioned, full-width wrapper the backdrop hangs off. It is here
@@ -38,46 +39,54 @@ const HeroSection = () => {
       <HeroChartBackdrop />
 
       <div className={SHELL}>
-        <div className="mx-auto max-w-4xl pt-10 text-center md:pt-14">
+        <div className="mx-auto max-w-5xl pt-12 text-center md:pt-16">
           {/* Each phrase is its own span so the line can rise in sequence on
-              load. The animation is CSS, not GSAP: this is the LCP element, and
-              waiting for a client bundle to reveal the headline would delay the
-              one thing the page is measured on.
+              load. The animation is CSS, not GSAP: this is the LCP element,
+              and waiting for a client bundle to reveal the headline would
+              delay the one thing the page is measured on.
 
-              It used to read "Manage your finances with Intelligence." The
-              gradient word was the problem: the About page labels the financial
-              intelligence layer Planned and ADR-004 records that it is not built,
-              so the largest text on the site was promising the one thing the
-              product does not do yet. What it does do is put the whole picture in
-              one place, which is what it now says. */}
-          <h1 className="hero-headline mt-5 text-balance text-5xl font-bold leading-[1.05] tracking-tight md:text-6xl lg:text-7xl">
-            <span>Your</span> <span>finances.</span>{" "}
-            {/* The gradient sits on one phrase, not the whole heading: a fully
-                gradient-filled h1 reads as decoration, and it is the single
-                loudest thing on a page asking to be trusted with money. */}
-            <span className="gradient-title -mr-2">One clear picture.</span>
+              The brand ramp runs across the whole head, top left to bottom
+              right, by instruction. One gradient over both lines rather than
+              one per word: the background is painted on the h1 and clipped to
+              its text, so the ramp crosses the headline as a single sweep and
+              the words keep their own weights inside it.
+
+              It is the brand's own ramp and nothing else. `gradient-fixed`
+              reads --brand-headline-from and --brand-headline-to, the one
+              pair in the token block the dark theme does not redefine: the
+              headline is to read in the same two colours in both themes, by
+              instruction, so it does not take the lifted set the rest of the
+              ramp switches to on a dark ground. The figures are in the token
+              block beside the declaration.
+
+              pb-2: "Manage" and "Intelligence" both have descenders, and
+              background-clip: text crops to the text box. Without it the
+              tails of the g's are cut. */}
+          <h1 className="hero-headline gradient-fixed bg-clip-text pb-2 text-balance text-5xl font-bold leading-[1.03] tracking-tight text-transparent md:text-6xl lg:text-[5.25rem]">
+            <span>Manage</span> <span>Your</span> <span>Finances</span>{" "}
+            <span>with</span> <span>Intelligence</span>
           </h1>
 
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-[1.8] text-muted-foreground">
-            Track your accounts, record what you spend, plan against a budget and
-            see where the month actually went — without connecting a bank or
-            handing over a card number.
+          {/* One sentence, and the strongest real fact in it. The longer
+              version named four features and ended on an em dash; the four
+              features are the section directly below this one. */}
+          <p className="mx-auto mt-6 max-w-xl text-lg leading-[1.7] text-muted-foreground md:text-xl">
+            One place for every account, transaction and budget, with no bank
+            connection.
           </p>
 
           {/* Two actions, in order: create an account, or look first.
 
-              The secondary one is here as well as in the header on purpose. The
-              header's "Explore WHealthOS" button is hidden below md, so on a
-              phone the only way into the demo from the first viewport was the
-              collapsed menu -- and looking before signing up is the thing most
-              visitors to a pre-launch finance product want to do. Both
-              destinations exist: /sign-up is the real Clerk flow and /demo is the
-              application on sample data.
-
-              The reference's pill geometry, matching the header's own buttons. */}
-          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            {/* asChild: the button renders as the link itself. A <button> nested
-                inside an <a> is invalid HTML. */}
+              The secondary one is here as well as in the header on purpose.
+              The header's "Explore WHealthOS" button is hidden below md, so on
+              a phone the only way into the demo from the first viewport was
+              the collapsed menu -- and looking before signing up is the thing
+              most visitors to a pre-launch finance product want to do. Both
+              destinations exist: /sign-up is the real Clerk flow and /demo is
+              the application on sample data. */}
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            {/* asChild: the button renders as the link itself. A <button>
+                nested inside an <a> is invalid HTML. */}
             <Button
               size="lg"
               asChild
@@ -98,10 +107,11 @@ const HeroSection = () => {
           </div>
         </div>
 
-        {/* Full content width, which is wider than the max-w-6xl it had before:
-            the walkthrough is the product demonstration and it was rendering
-            narrower than the footer columns beneath it. */}
-        <DashboardProductDemo className="mt-14 lg:mt-16" />
+        {/* Full content width, and deliberately close under the actions: the
+            top of the real product has to be on the first screen, because it
+            is the only thing on this page that cannot be claimed by anybody
+            else. */}
+        <DashboardProductDemo className="mt-12 lg:mt-14" />
       </div>
     </div>
   );

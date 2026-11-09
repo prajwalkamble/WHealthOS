@@ -23,8 +23,8 @@ const Faq = () => {
   return (
     <Section
       id="faq"
-      eyebrow="Questions"
-      title="Before you sign up"
+      gap="l"
+      title="FAQs"
       lead="The things worth knowing that the rest of this page does not answer."
     >
       <div className="mt-10 grid gap-x-14 md:grid-cols-2">

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import StatCards from "@/app/(main)/dashboard/_components/stat-cards";
+import BudgetProgress from "@/app/(main)/dashboard/_components/budget-progress";
 import CashFlowChart from "@/app/(main)/dashboard/_components/cash-flow-chart";
 import CategoryDonut from "@/app/(main)/dashboard/_components/category-donut";
 import IncomeSources from "@/app/(main)/dashboard/_components/income-sources";
@@ -96,7 +97,7 @@ const DashboardProductDemo = ({ className }) => {
   const demoDark = resolvedTheme !== "dark";
 
   const { transactions, accounts, dashboard } = useMemo(() => landingDashboard(), []);
-  const { summary, cashFlow, breakdown } = dashboard;
+  const { summary, cashFlow, breakdown, budget } = dashboard;
 
   useDashboardDemoTimeline({
     rootRef,
@@ -135,7 +136,7 @@ const DashboardProductDemo = ({ className }) => {
         // Not aria-hidden: the figures, transaction names and account names
         // below are real content and stay readable with the animation off.
         role="img"
-        aria-label="The WHealthOS dashboard, showing balance, income, expenses, savings rate, cash flow, expense breakdown, recent transactions and account balances."
+        aria-label="The WHealthOS dashboard, showing balance, income, expenses, savings rate, cash flow, expense breakdown, recent transactions, the monthly budget and account balances."
       >
         {/* inert as well as pointer-events-none. pointer-events-none puts the
             walkthrough out of a mouse's reach but leaves its controls in the
@@ -158,7 +159,12 @@ const DashboardProductDemo = ({ className }) => {
             data-demo-panel=""
             className="hidden w-44 shrink-0 border-r bg-card/40 p-3 lg:block"
           >
-            <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {/* Sentence case at 12px, not 10px tracked capitals. The real
+                sidebar does not label its own navigation at all; this one
+                keeps the word because the rail is only 11rem wide here and a
+                bare list of eight items reads as a menu more slowly without
+                it. */}
+            <p className="px-2 pb-2 text-xs font-medium text-muted-foreground">
               Menu
             </p>
             <ul className="space-y-0.5">
@@ -250,10 +256,15 @@ const DashboardProductDemo = ({ className }) => {
                 </Panel>
               </div>
 
-              {/* 3:2 rather than even halves. At 1:1 the transaction name
-                  column was squeezed to about ten characters and every
-                  merchant rendered as "Mo...". */}
-              <div className="grid gap-4 xl:grid-cols-[3fr_2fr]">
+              {/* The signed-in dashboard's own last row, and now the same
+                  one: two equal halves, transactions filling the left, the
+                  budget card over the accounts panel on the right. The budget
+                  card was the one panel a visitor met only after signing up --
+                  the walkthrough showed seven of the dashboard's eight and
+                  left out the one that tells you something before you have
+                  overspent. app/(main)/dashboard/page.jsx:41-64 is the
+                  arrangement this mirrors. */}
+              <div className="grid gap-4 xl:grid-cols-2">
                 <Panel name="transactions" className="flex min-w-0">
                   <RecentTransactions
                     transactions={transactions}
@@ -262,9 +273,22 @@ const DashboardProductDemo = ({ className }) => {
                     viewAllHref="/demo/transactions"
                   />
                 </Panel>
-                <Panel name="accounts" className="flex min-w-0">
-                  <AccountsPanel accounts={accounts} guest />
-                </Panel>
+                <div className="flex min-w-0 flex-col gap-4">
+                  {/* shrink-0 for the same reason the real dashboard needs it:
+                      the accounts card otherwise claims the column's full
+                      height and squeezes the budget bar out of its card. */}
+                  <Panel name="budget" className="shrink-0">
+                    <BudgetProgress
+                      initialBudget={budget.budget}
+                      currentExpenses={budget.currentExpenses}
+                      hasAccount
+                      guest
+                    />
+                  </Panel>
+                  <Panel name="accounts" className="flex min-w-0 flex-1">
+                    <AccountsPanel accounts={accounts} guest />
+                  </Panel>
+                </div>
               </div>
 
             </div>

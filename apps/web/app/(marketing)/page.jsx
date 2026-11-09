@@ -3,10 +3,12 @@ import HeroSection from "@/components/hero";
 import StatCounter from "@/components/landing/stat-counter";
 import Capabilities from "@/components/landing/capabilities";
 import Workflow from "@/components/landing/workflow";
-import Trust from "@/components/landing/trust";
-import Writing from "@/components/landing/writing";
 import Faq from "@/components/landing/faq";
 import FinalCta from "@/components/landing/final-cta";
+import { CurrencyProvider } from "@/components/currency-provider";
+import { currentCurrency } from "@/lib/currency/server";
+import { rateTable } from "@/lib/currency/rates/store";
+import { DEMO_CURRENCY } from "@/lib/demo/data";
 import { buildStatTiles } from "@/lib/stat-tiles";
 import { getLandingStats } from "@/lib/stats";
 import { OG_IMAGE } from "@/lib/brand/identity.mjs";
@@ -64,12 +66,17 @@ export const metadata = {
 //   hero          what this is, and the product itself doing it
 //   numbers       four figures out of our own database, as evidence
 //   features      what you can actually do, with the benefit leading
-//   solutions     three of the real dashboard's panels, each beside its idea
+//   solutions     the real dashboard's own panels, each beside its idea
 //   workflow      how you get from an empty account to a month that reads
-//   trust         what is verified about handling the data, and what is not
-//   writing       what has actually been published
 //   faq           the questions none of the above answered
 //   final cta     the one action the page has been arguing for
+//
+// Two sections were removed by instruction: the security list ("What we can
+// actually tell you about your data") and the writing index. Neither claim is
+// retracted and nothing became unreachable -- /security still carries the
+// verified list and the gaps it names, /blog still carries the posts, and the
+// footer links to both (SECURITY_LINK and COMPANY_CONTENT_LINKS). They are
+// simply no longer argued on the landing page.
 //
 // Sections that a comparable SaaS page would carry are absent because
 // WHealthOS cannot support them honestly, and an empty version of each would
@@ -120,12 +127,44 @@ export default async function Home() {
     })
   );
 
+  // The display currency for this visitor, from the same resolver the signed-in
+  // app and /demo use: a cookie they set, then the account, then the country
+  // the edge put on the request. lib/currency/detect.js does the last of those
+  // from x-vercel-ip-country with no GeoIP service and no browser prompt, so
+  // someone in Tokyo meets the product in yen and someone in Ohio in dollars,
+  // and neither waits on a lookup for it.
+  const currency = await currentCurrency();
+
+  // A rate lookup must never take down the most-visited page on the site. With
+  // no rate for the resolved currency the provider refuses to convert and
+  // formats in INR instead -- a figure in the wrong currency's place is a
+  // problem, but relabelling one number as another on a finance page is a
+  // much worse one, and this is the arrangement that cannot do it.
+  let rates = { base: "EUR", rates: {}, asOf: null, stale: true };
+  try {
+    rates = await rateTable();
+  } catch {
+    // Keep the default above: no rates means no conversion, not no page.
+  }
+
   return (
-    // No top padding: the marketing layout now reserves the fixed header's
-    // space for every page at once. The bottom padding is this page's own --
-    // it ends on a section with no background of its own, so it needs the gap
-    // before the footer's rule.
-    <div className="pb-24">
+    // The sample figures in the hero walkthrough and in the Solutions panels
+    // are written in INR and stay that way; the rate table ships with the page
+    // and CurrencyProvider converts for display, exactly as app/demo/layout.jsx
+    // already does. The statistics band below is untouched by this: it formats
+    // its own figures through a fixed en-IN formatter in lib/stat-tiles.js and
+    // never calls useCurrency, which is why one provider can wrap the whole
+    // page without the band moving.
+    <CurrencyProvider
+      initial={currency}
+      ledger={[DEMO_CURRENCY]}
+      rates={rates}
+    >
+      {/* No top padding: the marketing layout now reserves the fixed header's
+          space for every page at once. The bottom padding is this page's own:
+          it ends on a section with no background of its own, so it needs the
+          gap before the footer's rule. */}
+      <div className="pb-24">
       <HeroSection />
 
       {/* The statistics band, in the treatment it has always had: a full-bleed
@@ -155,7 +194,14 @@ export default async function Home() {
                   <div className="mb-2 text-4xl font-bold tabular-nums tracking-tight text-primary">
                     <StatCounter value={stat.value} />
                   </div>
-                  <div className="text-muted-foreground">{stat.label}</div>
+                  {/* text-foreground/70, not text-muted-foreground. The band
+                      is bg-muted, and --muted-foreground on --muted measures
+                      4.35:1 -- under the 4.5:1 AA needs for 16px text, which
+                      is what these labels are. The composite here is 7.0:1 on
+                      light and 7.8:1 on dark, and sits within a shade of the
+                      grey it replaces: the band reads as it always has, it is
+                      just legible on a laptop in daylight. */}
+                  <div className="text-foreground/70">{stat.label}</div>
                 </div>
               ))}
             </div>
@@ -166,10 +212,9 @@ export default async function Home() {
       <Capabilities />
       <Solutions />
       <Workflow />
-      <Trust />
-      <Writing />
       <Faq />
       <FinalCta />
-    </div>
+      </div>
+    </CurrencyProvider>
   );
 }

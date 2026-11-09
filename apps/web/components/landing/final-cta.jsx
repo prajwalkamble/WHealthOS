@@ -31,9 +31,7 @@ const FinalCta = () => (
         id="get-started"
         className="mx-auto max-w-3xl scroll-mt-28 text-balance text-3xl font-semibold leading-[1.15] tracking-tight md:text-[2.5rem]"
       >
-        Bring your finances{" "}
-        {/* The one piece of brand colour in the section. */}
-        <span className="gradient-title -mr-2">into focus</span>.
+        Bring your finances into focus.
       </h2>
 
       <p className="mx-auto mt-5 max-w-xl text-lg leading-[1.8] text-muted-foreground">

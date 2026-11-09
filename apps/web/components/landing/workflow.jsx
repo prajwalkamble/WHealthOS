@@ -16,20 +16,23 @@ import Section, { BODY } from "./section";
 const Workflow = () => (
   <Section
     id="workflow"
-    eyebrow="How it works"
     title="Three steps to a month you can read"
     lead="No bank connection to authorise and no import to wait on. You record what moves, and WHealthOS does the arithmetic."
   >
     <ol className="mt-12 grid gap-px overflow-hidden rounded-[20px] border bg-border md:grid-cols-3">
       {WORKFLOW.map(({ title, body }, index) => (
         <li key={title} className="bg-card p-7 md:p-8">
-          <span
-            aria-hidden
-            className="block text-xl font-semibold tabular-nums text-primary"
-          >
-            {String(index + 1).padStart(2, "0")}
-          </span>
-          <h3 className="mt-3 text-xl font-semibold tracking-tight">{title}</h3>
+          {/* The numeral sits on the title's line, not as an "01" label
+              stacked above it: a number alone on a row is a label, and a
+              label over a head is the shape 54 names. The <ol> already
+              carries the sequence for a screen reader, so this is decorative
+              and aria-hidden rather than read out twice. */}
+          <h3 className="flex items-baseline gap-3 text-xl font-semibold tracking-tight">
+            <span aria-hidden className="tabular-nums text-muted-foreground">
+              {index + 1}
+            </span>
+            {title}
+          </h3>
           <p className={cn("mt-3", BODY)}>{body}</p>
         </li>
       ))}

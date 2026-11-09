@@ -40,7 +40,6 @@ const linkClass = cn(
 const Capabilities = () => (
   <Section
     id="features"
-    eyebrow="What it does"
     title="Everything you need to run your own money"
     lead="Six parts of one application, not six products. Each is built and in use today."
   >
@@ -61,17 +60,22 @@ const Capabilities = () => (
               so a row spanning the whole grid is not one long line of text. */}
           <div className={cn("flex flex-col", full && "lg:flex-row lg:items-start lg:gap-12")}>
             <div className={cn(full && "lg:w-[23rem] lg:shrink-0")}>
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <Icon aria-hidden className="h-[18px] w-[18px]" />
-              </span>
-
-              <h3 className="mt-5 text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {/* The icon sits on the label's own line rather than in a
+                  rounded tile above the heading. Three columns of
+                  icon-in-a-box over a title is the card tell every generated
+                  feature grid reaches for, and the box was carrying no
+                  information the icon did not. The label is the body face a
+                  step down, sentence case, untracked: it used to be 14px
+                  uppercase tracked 0.12em, which is the one label treatment
+                  that reads as machine-set at any size. */}
+              <h3 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Icon aria-hidden className="h-4 w-4 shrink-0" />
                 {title}
               </h3>
               {/* The benefit is the heading a reader actually reads; the
                   feature name above it is the label. Ordered that way on
                   purpose. */}
-              <p className="mt-2.5 text-balance text-xl font-semibold leading-snug tracking-tight">
+              <p className="mt-2 text-balance text-xl font-semibold leading-snug tracking-tight">
                 {benefit}
               </p>
             </div>

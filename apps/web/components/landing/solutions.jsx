@@ -8,7 +8,7 @@ import CategoryDonut from "@/app/(main)/dashboard/_components/category-donut";
 import IncomeSources from "@/app/(main)/dashboard/_components/income-sources";
 import RecentTransactions from "@/app/(main)/dashboard/_components/recent-transactions";
 import { landingDashboard } from "@/lib/demo/landing-data";
-import { BODY, EYEBROW, HEADING, LEAD, SHELL } from "./section";
+import { BODY, HEADING, LEAD, SHELL } from "./section";
 import { cn } from "@/lib/utils";
 
 // Three things the product does, each shown doing it.
@@ -37,7 +37,6 @@ import { cn } from "@/lib/utils";
 const SOLUTIONS = [
   {
     id: "record",
-    eyebrow: "Record",
     title: "Every payment, in one ledger",
     // actions/transaction.js: create, update, bulk delete, scanReceipt.
     body: "Add income, expenses and transfers as they happen, or photograph a receipt and confirm what it read. Each one carries its account and its category, so the month adds up without a spreadsheet.",
@@ -48,7 +47,6 @@ const SOLUTIONS = [
   },
   {
     id: "plan",
-    eyebrow: "Plan",
     title: "A budget that tells you in time",
     // lib/inngest/functions.js checkBudgetAlert / sendBudgetAlert.
     body: "Set a monthly limit and WHealthOS measures it against what you have actually spent on your default account. The email arrives as you approach the limit, which is while it can still change anything.",
@@ -57,7 +55,6 @@ const SOLUTIONS = [
   },
   {
     id: "understand",
-    eyebrow: "Understand",
     title: "Where it came from, where it went",
     // CategoryDonut and IncomeSources, both from the real dashboard.
     body: "Spending grouped by category and income by source, each against the same month last time, so a change shows up as a change rather than as a number you have to remember.",
@@ -77,8 +74,11 @@ const Row = ({ solution, index, children }) => {
       )}
     >
       <div className={cn("min-w-0", flipped && "lg:order-2")}>
-        <p className={EYEBROW}>{solution.eyebrow}</p>
-        <h3 className="mt-3 text-balance text-2xl font-semibold tracking-tight md:text-3xl">
+        {/* No label above the heading. Each of these rows used to open with
+            "Record", "Plan" or "Understand" in tracked capitals, and the
+            heading underneath already said the same thing in words a reader
+            could use. */}
+        <h3 className="text-balance text-2xl font-semibold tracking-tight md:text-3xl">
           {solution.title}
         </h3>
         <p className={cn("mt-4 max-w-xl", BODY)}>{solution.body}</p>
@@ -132,10 +132,9 @@ const Solutions = () => {
   return (
     <section aria-labelledby="solutions" className="reveal mt-20 md:mt-28">
       <div className={SHELL}>
-        <p className={EYEBROW}>In the product</p>
         <h2
           id="solutions"
-          className={cn("mt-3 max-w-3xl scroll-mt-28", HEADING)}
+          className={cn("max-w-3xl scroll-mt-28", HEADING)}
         >
           The same screens you get after signing in
         </h2>

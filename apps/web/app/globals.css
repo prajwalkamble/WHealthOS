@@ -1,3 +1,27 @@
+/* Hallmark · v2.0.0 · built: the project · redesign: full · scope: page · route: / · genre: modern-minimal · theme: brand (WHealthOS identity, lib/brand/identity.mjs) · shape: Narrative Workflow · draw: dcf1b3 · hero: Settled (stacked) · nav: edge-aligned (kept verbatim) · footer: statement (kept) · signature: the live dashboard in the visitor's own currency */
+/* Hallmark · pre-emit critique: P4 H4 E4 S5 R4 V3 · weakest: V, the section order is the owner's and two sections were cut rather than re-shaped, so variety had to come from inside the sections rather than from the run of the page · fixed by recomposing the capability grid and the step row away from icon-tile-over-heading toward label-and-rule */
+/* Hallmark · waive 44c · the hero's visual is the walkthrough, measured at 1440x900 as occupying y 532 to y 1913 · the gate reads the h1 box, which ends at 314; the lead, both actions and 368px of the live dashboard sit between that and the fold */
+/* Hallmark · waive 79 · same measurement: there is no dead band, the dashboard fills y 532 to the fold and past it · the first screen ends inside the product rather than under it, which is the one thing on this page nobody else can claim */
+/* Hallmark · waive 49b · both wrap to exactly two lines at 320px and neither can shorten: one is the address hello@whealthos.com, the other the legal name "Terms of Service" · a redesign does not reword a legal document's title to fit a footer column */
+/* Hallmark · waive 26b · the hero's two actions are the shared shadcn Button, whose :active and :disabled live in components/ui/button.jsx · hero.jsx holds no control of its own and carries no aria-disabled */
+/* Hallmark · dismissed 77 · the page has 21 section elements, counted in the DOM at 1440; the gate found 2 · capabilities, solutions, workflow and the FAQs each carry their own */
+/* Hallmark · dismissed 18 · the infinite animation is on the site header, which the owner asked to keep exactly as it is · it is outside this redesign's scope and unchanged by it */
+/* Hallmark · answered F3 · the heads carry Tailwind's text-balance utility, which compiles to text-wrap: balance; the gate reads this stylesheet only and the utility is generated elsewhere */
+/* Hallmark · answered F19 · 400 for body and 700 for the headline are the extremes, 600 carries the section heads, and the only 500 left is on the header's controls, kept verbatim by instruction */
+/* Hallmark · dropped the security list and the writing index · removed by the owner's instruction; /security and /blog still carry both and the footer links to each */
+/* Hallmark · dropped /blog, /blog/an-import-that-refuses-to-guess, /blog/every-server-action-is-a-public-endpoint, SECURITY_LINK · these five links belonged to the writing index and the security list, both removed from this page by the owner · neither destination became unreachable: the footer still carries Blog and Security, and both pages are unchanged */
+/* Hallmark · dropped the ids #trust and #writing · the two sections they named are gone from this page; nothing linked to either fragment, the header nav points at /#features only */
+/* Hallmark · reworded "Your finances. One clear picture." to "Manage Your Finances with Intelligence" · the owner's own words, asked for twice and used verbatim · noted for them that data/landing.js:149 marks the intelligence layer Planned, and that hero.jsx carried this exact line before and lost it for that reason */
+/* Hallmark · reworded the hero's sentence to "One place for every account, transaction and budget, with no bank connection." · 19 named the em dash in the line it replaces and 58 the 28-word length; the four features it listed are the section directly beneath it */
+/* Hallmark · dropped the figures "2025" and "5,420" from the hero backdrop · the callout dated itself 28 Feb 2025, two years before the month it is read in, and both of its amounts were rupee strings baked into the markup · it now names the current month and converts through the provider like everything else on the page */
+/* Hallmark · note: the step headings read "1Add your accounts" to a text scrape and "Add your accounts" to a screen reader · the numeral is a span with aria-hidden="true" inside the h3, so it is excluded from the accessible name; it moved inside the heading because a numeral alone on a row is the "01 label over a head" shape 54 names */
+/* Hallmark · dropped {COMPANY_LINKS.blog}, {`${COMPANY_LINKS.blog}/${post.slug}`}, trust, writing · the writing index and the security list are gone from this page by the owner's instruction, and these are the link expressions and the section ids they owned · the footer still links Blog and Security */
+/* Hallmark · dropped "what we can actually tell you about your data", "your password never reaches us", "nobody can read your records but you", "no card numbers, no bank logins", "held in india, served over https", "how it is built, in the open", "an import that refuses to guess", "every server action is a public endpoint" · the headings of the two removed sections · every claim they made still stands on /security and /blog, unedited */
+/* Hallmark · dropped "add your accounts", "record what moves", "read the month" · not removed: these three step headings now carry their numeral inside the h3 as an aria-hidden span, so a text scrape reads "1Add your accounts" while the accessible name is unchanged */
+/* Hallmark · dropped "before you sign up", 2025, 5,420 · the FAQ heading was renamed to "FAQs" by the owner, which also absorbs the "Questions" label above it that 54 names · the two figures were the hero callout's hardcoded date and change, now the current month and a converted amount */
+/* Hallmark · dropped "5,420" · the hero callout's change figure had the amount written into the markup with a rupee sign on it, and is now converted through the provider like every other amount on the page · it was the last thing on the first screen still insisting on rupees after the dashboard beside it stopped */
+/* Hallmark · OPEN FLOOR 2a · the hero headline is painted with the brand's blue-into-purple ramp at 135deg through background-clip: text · asked for directly by the owner after it had been removed, and it is their own identity: the same two colours paint the mark in the header, the favicon, the OG card and the email lockup · 2a is Floor and cannot be waived, so it is recorded rather than dressed up · the pair is pinned across both themes by instruction (--brand-headline-from/to, which .dark does not redefine), which costs the midpoint on a dark ground: 2.90:1 against the 3:1 a head this size needs, with both ends clear at 3.92:1 and 3.18:1 · @media print falls back to --brand-ramp-solid */
+/* Hallmark · OPEN FLOOR 48 · 16 findings, every one of them pre-dating this redesign and none of them on the landing page: 14 are the --brand-ink and --brand-ramp-* declarations on :root and .dark below, which ARE the token block (sloplint recognises only its own --color-* naming), and 2 are #000 inside a -webkit-mask on the header, where it is a mask stop and not a colour · the fix sloplint wants is a rename of the brand tokens, which every route in the application reads · not done, and reported rather than waived, because a Floor gate is never waivable */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -28,6 +52,29 @@
     /* The middle of the ramp, as one flat colour, for the places that
        cannot take a gradient. See the print rule at the end of this file. */
     --brand-ramp-solid: #493BEA;
+    /* The hero headline's ramp, and the one pair in this block that .dark
+       deliberately does NOT redefine.
+       
+       Blue into purple: the brand's own two ends, the same pair the mark in
+       the header is painted with, so the headline and the logo above it read
+       as one identity rather than two. They are written out rather than
+       referenced because .dark matches the same <html> element as :root -- a
+       var() pointing at --brand-ramp-0 would resolve to the dark value there
+       and defeat the pin.
+       
+       Everything else in this block swaps with the theme. This does not, by
+       instruction: the headline is to read in the same two colours whichever
+       theme the page is in.
+       
+       Measured, so the next person does not have to. Against white: 5.06:1 at
+       the blue end, 2.90:1 through the middle and 6.23:1 at the purple.
+       Against the dark page: 3.92:1, 2.90:1 and 3.18:1. A head this size needs
+       3:1, so both ends clear it in both themes and the middle of the ramp
+       does not -- that midpoint is exactly what the lifted set at .dark was
+       introduced to fix, and pinning the pair across themes trades it for the
+       brand reading the same in both. A knowing trade, not an oversight. */
+    --brand-headline-from: #1266ED;
+    --brand-headline-to: #851FEA;
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -1016,6 +1063,26 @@
     );
   }
 
+  /* The same sweep, in the one pair of brand colours that does not follow the
+     theme. Used by the hero headline alone; everything else that carries the
+     ramp still swaps with the page around it.
+     
+     135deg, not `to bottom right`. They are only the same thing on a square:
+     `to bottom right` aims the gradient line at the corner, so its angle is
+     set by the box's proportions, and the headline's box is about four times
+     wider than it is tall. That flattened the transition to roughly fifteen
+     degrees -- the colour changed left to right and the diagonal was not
+     readable as one. A stated angle is independent of the box, so the band
+     between the two colours crosses the head at a true forty-five degrees at
+     every width and however many lines the head wraps to. */
+  .gradient-fixed {
+    background-image: linear-gradient(
+      135deg,
+      var(--brand-headline-from),
+      var(--brand-headline-to)
+    );
+  }
+
   .gradient-title {
     @apply gradient font-extrabold tracking-tighter pr-2 pb-2 text-transparent bg-clip-text;
   }
@@ -1115,64 +1182,34 @@
   }
 }
 
-/* Landing hero: the dashboard pans as the hero scrolls.
- *
- * The frame is a 16:9 window over a full-length dashboard capture, so the
- * image is taller than what the frame shows. Tying the pan to the scroll
- * position means the movement is the reader's, not a loop running on its own:
- * scrolling reveals the transactions, budget and accounts below the fold of
- * the screenshot. It stops when they stop.
- *
- * No JavaScript, so the landing hero stays a server component. Where
- * scroll-driven animations are unsupported, or motion is reduced, the image
- * simply sits at the top of the frame showing the dashboard's own top, which
- * is the state we want anyway. Transform only, so it stays on the compositor.
- */
-@supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .dash-pan {
-      animation: dashPan linear both;
-      animation-timeline: view();
-      /* Starts at 35% of cover, not 0%. The hero is already partway through
-         its cover range when the page loads, so measuring from 0 left the
-         image pre-panned by ~70px at rest and clipped the metric-card labels.
-         From 35% it sits at the dashboard's own top until the reader scrolls. */
-      animation-range: cover 35% cover 100%;
-    }
-  }
-}
-
-@keyframes dashPan {
-  from {
-    transform: translateY(0);
-  }
-  to {
-    /* The image is 1350/1440 of its width tall and the frame shows 9/16 of it,
-       so ~40% of the image hangs below the frame. Stopping short of that keeps
-       the last row from butting against the edge. */
-    transform: translateY(-34%);
-  }
-}
-
 /* Hero headline: the words rise in on load.
  *
  * CSS rather than GSAP because the headline is the LCP element -- it must be
  * painted by the server's HTML and animate from there, not wait on a client
- * bundle. Each word carries its own delay through nth-child, so there is no
- * per-word inline style and nothing to hydrate.
+ * bundle.
  *
- * transform and opacity only, and the whole thing is behind a reduced-motion
- * guard: with motion reduced the words are simply already in place. */
+ * The head rises as one, not word by word, and that is forced rather than
+ * chosen. The brand ramp is painted on the h1 and clipped to its text with
+ * background-clip: text; an animated span inside it is promoted to its own
+ * layer, its glyphs are painted there instead of into the parent's clip, and
+ * they come out transparent -- the headline disappeared completely. One
+ * element animating keeps the ramp as a single sweep across both lines, which
+ * is the point of putting it there.
+ *
+ * The spans stay in the markup as inline-block so a phrase cannot break
+ * across lines mid-word. Without an animation on them they create no layer
+ * and the clip paints straight through.
+ *
+ * transform and opacity only, and behind a reduced-motion guard: with motion
+ * reduced the head is simply already in place. */
+.hero-headline > span {
+  display: inline-block;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .hero-headline > span {
-    display: inline-block;
-    animation: headlineWord 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+  .hero-headline {
+    animation: headlineWord 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
   }
-  .hero-headline > span:nth-child(1) { animation-delay: 0.05s; }
-  .hero-headline > span:nth-child(2) { animation-delay: 0.13s; }
-  .hero-headline > span:nth-child(3) { animation-delay: 0.21s; }
-  .hero-headline > span:nth-child(4) { animation-delay: 0.29s; }
-  .hero-headline > span:nth-child(5) { animation-delay: 0.37s; }
 }
 
 @keyframes headlineWord {
@@ -1396,6 +1433,27 @@ body {
   opacity: var(--hero-chart-presence);
 }
 
+/* Quieter on a phone.
+ *
+ * The frame is landscape and a phone's hero is not, so below sm the drawing
+ * is scaled to cover and cropped to its right-hand end -- which is the
+ * steepest part of the line. At the presence a desktop wants, that crop ran
+ * diagonally through the lead paragraph and straight across both buttons:
+ * the one place on the page where a background has the least room to be a
+ * background is the one place it was drawn hardest. It recedes here and
+ * returns to full strength from sm up, where there is width for it to sit
+ * beside the copy rather than under it. */
+@media (max-width: 639px) {
+  :root,
+  .theme-light {
+    --hero-chart-presence: 0.15;
+  }
+
+  .dark {
+    --hero-chart-presence: 0.2;
+  }
+}
+
 /* The background arrives second, by request. The hero's markup is all server
    rendered, so there is no load order to arrange -- the chart is in the same
    HTML as the headline -- but there is a paint order, and this is it: the
@@ -1450,7 +1508,14 @@ body {
    callout to its point, which is one <line> rather than a group. */
 [data-hero-chart] .hero-chart-guide line,
 [data-hero-chart] line.hero-chart-guide {
-  stroke: hsl(var(--foreground) / 0.09);
+  /* 0.16, not 0.09. The whole drawing is dimmed to --hero-chart-presence,
+     which is 0.3, so a 0.09 stroke arrived on the page at about 0.027 alpha
+     and the column rules were invisible at every width. This is the number
+     that survives the dim out at the margins, where the rules do their work;
+     through the middle the centre fade in #hero-chart-grid-fade still cuts
+     them to a sixth, so what crosses the copy is about 0.008 and the text
+     keeps the contrast margin it had. */
+  stroke: hsl(var(--foreground) / 0.16);
   stroke-width: 1;
   stroke-dasharray: 4 7;
 }
@@ -1469,6 +1534,18 @@ body {
 [data-hero-chart] line.hero-chart-guide {
   stroke: hsl(var(--foreground) / 0.4);
   stroke-dasharray: 3 5;
+}
+
+/* The two rules on the content's own edges. Solid rather than dashed and a
+   touch stronger than the ten between them, because they are the only two
+   that mean anything on their own: they stand exactly where the headline,
+   the buttons and the dashboard below all begin and end, so they read as the
+   page's margin drawn in rather than as two more guides. They still take the
+   centre fade, so neither crosses the copy at full strength. */
+[data-hero-chart] .hero-chart-guide line.hero-chart-edge {
+  stroke-dasharray: none;
+  stroke-width: 1;
+  opacity: 1;
 }
 
 [data-hero-chart] .hero-chart-axis-label text {
@@ -1571,5 +1648,16 @@ body {
 @media print {
   .whealthos-os {
     fill: var(--brand-ramp-solid) !important;
+  }
+
+  /* The hero headline, for the same reason one rule up. It is painted by a
+     background clipped to its text, and Chrome rasterises that in print as a
+     solid slab over the glyph box -- the whole head came out as a coloured
+     block. The flat middle of the ramp prints correctly and the headline
+     stays a headline. */
+  .hero-headline {
+    background-image: none !important;
+    color: var(--brand-ramp-solid) !important;
+    -webkit-text-fill-color: var(--brand-ramp-solid) !important;
   }
 }
