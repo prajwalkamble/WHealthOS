@@ -196,7 +196,12 @@ describe("Signing in", () => {
     // this file asserts it: a later change that gates sign-in on consent would
     // lock out every account that predates the feature.
     const source = read("app/(auth)/sign-in/[[...sign-in]]/page.jsx");
-    expect(source).toContain("<SignIn />");
+    expect(source).toContain("<SignIn");
+    // Branding may be passed to the card -- appearance decides what it looks
+    // like, not where anyone ends up. A redirect prop may not: this used to
+    // pin the literal `<SignIn />`, which also failed the moment the logo was
+    // corrected, and said nothing about why.
+    expect(source).not.toMatch(/RedirectUrl/);
     expect(source).not.toMatch(/Checkbox|LEGAL|consent|welcome/i);
   });
 });

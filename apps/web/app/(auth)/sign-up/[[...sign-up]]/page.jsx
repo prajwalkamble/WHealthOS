@@ -1,4 +1,5 @@
 import { SignUp } from '@clerk/nextjs';
+import { authAppearance } from '@/lib/clerk-appearance';
 import Link from 'next/link';
 import { LEGAL_LINKS } from '@/lib/legal/versions';
 import { safeRedirect } from '@/lib/safe-redirect';
@@ -20,7 +21,7 @@ export default async function Page ({ searchParams }) {
           
           A requested destination is not dropped, it is deferred: it rides on
           /welcome and is used once consent has actually been given. */}
-      <SignUp forceRedirectUrl={afterSignUp} />
+      <SignUp forceRedirectUrl={afterSignUp} appearance={authAppearance} />
 
       {/* Both documents, reachable before anyone commits to anything. The
           acceptance itself is the next step, once Clerk has verified who this
