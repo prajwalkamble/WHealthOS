@@ -51,3 +51,23 @@ database/generated/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 .next-build
+
+# Internal audit documents. Kept on disk, deliberately NOT published.
+#
+# This repository is public. These files are security and billing audits of a
+# live deployment that takes real payments: they name unremediated findings in
+# the present tense, and they carry NOT VERIFIED and BLOCKED markers against
+# specific mechanisms. Written for the operator they are a remediation plan;
+# published on a public repository they are also a list of what is not fixed
+# yet.
+#
+# Not a secret and not a deletion: the content is in the working tree and the
+# full history is on the local branch backup/pre-docs-filter. If the repository
+# is ever made private, or the open items are closed, remove these two lines
+# and commit them.
+#
+# docs/security/README.md is NOT ignored -- it predates this and is already
+# published.
+docs/security/PRODUCTION_SECURITY_AUDIT.md
+docs/security/SECURITY_REMEDIATION_PLAN.md
+docs/testing/
