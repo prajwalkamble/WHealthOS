@@ -29,6 +29,18 @@ export const replyToAddress = () => process.env.RESEND_REPLY_TO_EMAIL || null;
 
 // Where in-app feedback is delivered, and where a verified inbound email is
 // forwarded. One address, because they are the same inbox in practice.
+//
+// It is the official business inbox, and the only destination feedback has.
+// actions/feedback.js used to describe this variable as "the maintainer's
+// personal address", which was wrong and worth correcting rather than
+// deleting: it is set to the address published on the Privacy Policy as the
+// grievance contact (lib/company/contact.js CONTACT_EMAIL), on the domain
+// verified as a sender in Resend. A reader deciding where user feedback goes
+// should find that said here, not contradicted in two files.
+//
+// Read at call time, deliberately. The action used to hold it in a
+// module-scope const, so a deployment that set the variable after boot kept
+// refusing feedback until the process restarted.
 export const inbox = () => process.env.FEEDBACK_EMAIL || null;
 
 export const apiKey = () => process.env.RESEND_API_KEY || null;

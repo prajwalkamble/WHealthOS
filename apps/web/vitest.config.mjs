@@ -33,6 +33,7 @@ const DATABASE_TESTS = [
   "tests/consent-integration.test.js",
   "tests/billing-integration.test.js",
   "tests/notification-integration.test.js",
+  "tests/feedback-integration.test.js",
   "tests/currency-conversion.test.js",
   "tests/currency-presentation.test.js",
 ];

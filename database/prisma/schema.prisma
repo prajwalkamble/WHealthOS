@@ -37,6 +37,7 @@ model User {
   goals        Goal[]
   contributions GoalContribution[]
   rating       Rating?
+  feedback     Feedback[]
   // Every legal document acceptance this person has given. See
   // apps/web/lib/legal/versions.js for what the version strings mean.
   legalConsents LegalConsent[]
@@ -311,6 +312,55 @@ model GoalContribution {
   @@index([goalId])
   @@index([userId])
   @@map("goal_contributions")
+}
+
+// In-app feedback, and the notification owed for it.
+//
+// The email used to BE the record: actions/feedback.js sent it inside the
+// request and kept nothing, so a Resend outage destroyed the submission. Now
+// the row is written first and the email is something owed against it --
+// retried by Inngest, swept hourly if the retry never ran, and marked
+// delivered or bounced by Resend's own webhook.
+//
+// Delivery state is on this row rather than in SubscriptionNotification
+// because that table's subscriptionId is required. One submission is one
+// email, so there is nothing a separate join row would express.
+model Feedback {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One of two known values, mirroring FEEDBACK_TYPES in app/lib/schema.js.
+  type FeedbackType
+  // As it was typed. The 4000-character cap is the schema's, in one place.
+  message String
+
+  // The notification's lifecycle, in the vocabulary the subscription outbox
+  // already uses, so one delivery webhook serves both.
+  status            NotificationStatus @default(QUEUED)
+  // Resend's id, and how its delivery webhook finds this row.
+  providerMessageId String?            @unique
+  attempts          Int                @default(0)
+  // Our own short reason. Never a provider payload, never the message.
+  lastError         String?
+
+  queuedAt    DateTime  @default(now())
+  acceptedAt  DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  // A person's own feedback, and the duplicate check.
+  @@index([userId, createdAt])
+  @@map("feedback")
+}
+
+enum FeedbackType {
+  FEEDBACK
+  PROBLEM
 }
 
 // One rating per user, which they can change. Averaged for the landing page.

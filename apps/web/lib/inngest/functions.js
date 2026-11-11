@@ -10,6 +10,11 @@ import { fetchRates } from "@/lib/currency/rates/provider";
 import { putRates } from "@/lib/currency/rates/store";
 import { MAX_ATTEMPTS, deliverActivation } from "@/lib/notifications/deliver";
 import {
+  FEEDBACK_SUBJECT_EVENT,
+  deliverFeedback,
+  staleFeedback,
+} from "@/lib/notifications/feedback-notification";
+import {
   ACTIVATION_SUBJECT_EVENT,
   queueActivationNotification,
   staleQueued,
@@ -778,5 +783,66 @@ export const refreshExchangeRates = inngest.createFunction(
     const stored = await step.run("store", () => putRates(payload));
 
     return { asOf: payload.asOf, source: payload.source, stored: stored.written.length };
+  }
+);
+
+// --- In-app feedback --------------------------------------------------------
+
+// Delivers the notification owed for one piece of feedback.
+//
+// The same shape as sendSubscriptionConfirmation above, and for the same
+// reason: the feedback is already saved, so this job's only job is the email.
+// It may run twice -- Inngest replays steps -- and deliverFeedback claims the
+// row with a compare-and-set so the second run sends nothing.
+export const sendFeedbackNotification = inngest.createFunction(
+  {
+    id: "send-feedback-notification",
+    name: "Send Feedback Notification",
+    retries: MAX_ATTEMPTS - 1,
+  },
+  { event: FEEDBACK_SUBJECT_EVENT },
+  async ({ event, step }) => {
+    const feedbackId = event.data?.feedbackId;
+    if (!feedbackId) return { skipped: "no feedback id" };
+
+    // One step, deliberately. Splitting "build the email" from "send it" would
+    // let Inngest replay the send against a cached build, and the whole point
+    // of rebuilding from the database at send time is that the account may
+    // have changed.
+    return step.run("deliver", () => deliverFeedback(feedbackId));
+  }
+);
+
+// The reconciling sweep for feedback.
+//
+// Everything above is best effort: the action's `inngest.send` can fail, and
+// the process can be killed between the insert and the send. Before feedback
+// was stored, either of those lost the submission outright. Now it leaves a
+// QUEUED row, and this is what finds it.
+//
+// Hourly and offset from the subscription sweep, so the two do not contend for
+// the same provider rate limit on the same minute.
+export const sweepFeedbackNotifications = inngest.createFunction(
+  { id: "sweep-feedback-notifications", name: "Sweep Feedback Notifications", retries: 1 },
+  { cron: "41 * * * *" },
+  async ({ step }) => {
+    const requeued = await step.run("requeue-stale", async () => {
+      const stale = await staleFeedback();
+      for (const row of stale) {
+        await inngest.send({
+          name: FEEDBACK_SUBJECT_EVENT,
+          data: { feedbackId: row.id },
+        });
+      }
+      return { requeued: stale.length };
+    });
+
+    if (requeued.requeued) {
+      // In a healthy deployment this is zero. Anything else says the ordinary
+      // path is dropping notifications.
+      console.warn({ code: "FEEDBACK_NOTIFICATIONS_SWEPT", details: requeued });
+    }
+
+    return requeued;
   }
 );

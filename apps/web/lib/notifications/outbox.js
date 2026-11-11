@@ -238,10 +238,31 @@ export async function applyDeliveryEvent({ providerMessageId, status, at = new D
     where: { providerMessageId },
     select: { id: true, status: true },
   });
-  if (!existing) return { matched: false, reason: "not-a-subscription-notification" };
+
+  if (!existing) {
+    // Not a subscription notification. It may still be feedback, which tracks
+    // its delivery on its own row -- `feedback` is 1:1 with its email, so it
+    // needs no join table and does not appear here.
+    //
+    // Imported lazily, and this is deliberate: feedback-notification.js
+    // imports sendEmail, which imports the Resend SDK, and this module is
+    // reached from the subscription email path on every activation. A static
+    // import would pull the mail client into that path to answer a question it
+    // never asks.
+    const { applyFeedbackDelivery } = await import("./feedback-notification");
+    const feedback = await applyFeedbackDelivery({ providerMessageId, status, at });
+    if (feedback.matched) return feedback;
+    return { matched: false, reason: "no-matching-notification" };
+  }
 
   if (!advancesTo(existing.status, status)) {
-    return { matched: true, applied: false, reason: "out-of-order", from: existing.status };
+    return {
+      matched: true,
+      applied: false,
+      reason: "out-of-order",
+      from: existing.status,
+      kind: "subscription",
+    };
   }
 
   await adminDb.subscriptionNotification.update({
@@ -256,7 +277,13 @@ export async function applyDeliveryEvent({ providerMessageId, status, at = new D
     },
   });
 
-  return { matched: true, applied: true, from: existing.status, to: status };
+  return {
+    matched: true,
+    applied: true,
+    from: existing.status,
+    to: status,
+    kind: "subscription",
+  };
 }
 
 // Notifications still owed. Ordered oldest first so a backlog drains in the

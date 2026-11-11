@@ -79,7 +79,15 @@ export async function recordDeliveryEvent(event) {
       status === NOTIFICATION_STATUS.FAILED)
   ) {
     console.error({
-      code: "SUBSCRIPTION_NOTIFICATION_NOT_DELIVERED",
+      // Named from the record the event landed on. This used to say
+      // SUBSCRIPTION for everything, which was true while subscription mail
+      // was the only tracked kind and became wrong the moment feedback was
+      // tracked too -- a bounced feedback notification would have been logged
+      // as a subscriber not getting their confirmation.
+      code:
+        result.kind === "feedback"
+          ? "FEEDBACK_NOTIFICATION_NOT_DELIVERED"
+          : "SUBSCRIPTION_NOTIFICATION_NOT_DELIVERED",
       details: { status, from: result.from },
     });
   }

@@ -73,9 +73,15 @@ const PERMANENT_PROVIDER_ERRORS = new Set([
 // is MAX_ATTEMPTS attempts and then a FAILED row -- the same end state, a few
 // hours later. The cost of being wrong the other way is a lost confirmation
 // for a subscription somebody paid for.
-const isPermanent = (result) =>
+// Exported so the feedback notification shares this judgement rather than
+// keeping a second copy of it. The list above is the expensive part -- knowing
+// which of Resend's error names will never succeed on a retry -- and two
+// copies of it would drift the moment one was updated.
+export const isPermanentFailure = (result) =>
   PERMANENT_REASONS.has(result.reason) ||
   PERMANENT_PROVIDER_ERRORS.has(result.error?.name ?? "");
+
+const isPermanent = isPermanentFailure;
 
 /**
  * Delivers one subscription notification, or explains why it did not.

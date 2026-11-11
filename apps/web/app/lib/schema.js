@@ -264,7 +264,11 @@ export const feedbackInputSchema = z.object({
 // feed in one ends the header and begins another, which is how a subject field
 // becomes a way to add recipients to somebody else's mail. Control characters
 // go, and runs of whitespace collapse, before the value is ever used.
-const headerSafe = (value) =>
+// Exported, because the contact form is no longer the only subject line built
+// from something a person typed. lib/notifications/feedback-notification.js
+// interpolates the author's display name, which they set themselves in Clerk,
+// and that is the same risk this function was written for.
+export const headerSafe = (value) =>
   String(value ?? "")
     .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")

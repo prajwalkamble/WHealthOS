@@ -11,6 +11,20 @@ import {
 } from "@react-email/components";
 import * as React from "react";
 import BrandHeader from "./_components/brand-header";
+import { APP_TIME_ZONE } from "../lib/time";
+
+// Dates in the application's timezone, not the server's. This is rendered by a
+// background job on a UTC clock, and formatting without a zone puts an evening
+// submission on the previous day for the people who sent it.
+const dateLabel = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: APP_TIME_ZONE,
+  }).format(date);
+};
 
 // Feedback sent from the widget in the app. Plain on purpose: this one is read
 // by the maintainer, not by a user, so what matters is who wrote it, what kind
@@ -20,7 +34,16 @@ export default function FeedbackEmail({
   message = "",
   from = "A WHealthOS user",
   replyTo = null,
+  // The stored row's id and the moment it was submitted. Both optional, so a
+  // model assembled before feedback had a table -- or by a test -- renders
+  // exactly as it did. The id is what makes a reply about a specific piece of
+  // feedback possible: it is the row to look up, and it is in no other copy of
+  // this message.
+  feedbackId = null,
+  submittedAt = null,
 }) {
+  const submitted = submittedAt ? dateLabel(submittedAt) : null;
+
   return (
     <Html>
       <Head />
@@ -37,6 +60,14 @@ export default function FeedbackEmail({
               From: {from}
               {replyTo ? ` (${replyTo})` : " (no email address on file)"}
             </Text>
+            {submitted ? (
+              <Text style={styles.meta}>Submitted: {submitted}</Text>
+            ) : null}
+            {feedbackId ? (
+              // Deliberately the last line and in the quiet style: it is for
+              // whoever needs to find the row, not for reading.
+              <Text style={styles.meta}>Reference: {feedbackId}</Text>
+            ) : null}
           </Section>
 
           <Hr style={styles.rule} />
