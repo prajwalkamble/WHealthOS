@@ -73,7 +73,7 @@ const STATUS_LABEL = {
  * with no email address. Those are all ordinary outcomes and none of them is
  * a reason to retry.
  */
-export async function activationModel(subscriptionId) {
+export async function activationModel(subscriptionId, { kind = EMAIL_KIND.ACTIVATION } = {}) {
   const subscription = await adminDb.subscription.findUnique({
     where: { id: subscriptionId },
     select: {
@@ -156,6 +156,11 @@ export async function activationModel(subscriptionId) {
     subscriptionId: subscription.id,
     recipient,
     model: {
+      // Which of the two letters this is. The template branches on it for the
+      // heading and the opening sentence and for nothing else: every figure
+      // below is read from the same records either way, so an activation and a
+      // plan change cannot come to disagree about what somebody is paying.
+      kind,
       userName: subscription.user?.name ?? null,
       recipientEmail: recipient,
       planName: name,
@@ -190,7 +195,32 @@ export async function activationModel(subscriptionId) {
 
 export const SUBJECT = "Your WHealthOS Subscription is Confirmed!";
 
+// The plan-change letter.
+//
+// Said as a fact that has already happened, not as a confirmation of a
+// purchase: by the time this is sent the cycle has turned, Razorpay has
+// charged the new plan's price, and the features have moved. It is written
+// this way because the decision was made weeks earlier -- somebody scheduled
+// an upgrade in one month and is reading about it in the next, and the thing
+// they need to recognise is the charge on their statement.
+export const PLAN_CHANGE_SUBJECT = "Your WHealthOS plan has changed";
+
+export const EMAIL_KIND = {
+  ACTIVATION: "activation",
+  PLAN_CHANGE: "plan-change",
+};
+
+export const subjectFor = (kind) =>
+  kind === EMAIL_KIND.PLAN_CHANGE ? PLAN_CHANGE_SUBJECT : SUBJECT;
+
 export const ACTIVATION_EVENT = NOTIFICATION_EVENT.SUBSCRIPTION_ACTIVATED;
+export const PLAN_CHANGE_EVENT = NOTIFICATION_EVENT.SUBSCRIPTION_PLAN_CHANGED;
+
+// The model builder's kind for a stored notification's event.
+export const kindForEvent = (event) =>
+  event === NOTIFICATION_EVENT.SUBSCRIPTION_PLAN_CHANGED
+    ? EMAIL_KIND.PLAN_CHANGE
+    : EMAIL_KIND.ACTIVATION;
 
 /**
  * The plain-text alternative, built from the same model as the HTML.
@@ -207,12 +237,26 @@ export function activationText(model) {
     if (value) lines.push(`${label}: ${value}`);
   };
 
-  lines.push("Your WHealthOS subscription is now active.");
+  // Only the opening differs between the two letters. Everything below is the
+  // same record, formatted the same way, because the questions somebody asks
+  // of a confirmation and of a plan change are identical: what plan, what did
+  // it cost, when does it renew, what do I now have.
+  const changed = model.kind === EMAIL_KIND.PLAN_CHANGE;
+
+  lines.push(
+    changed
+      ? `Your WHealthOS plan is now ${model.planName ?? "changed"}.`
+      : "Your WHealthOS subscription is now active."
+  );
   lines.push("");
   if (model.userName) lines.push(`Hello ${model.userName},`);
   lines.push(
-    "Thank you for choosing WHealthOS. Your subscription has been activated " +
-      "and everything on your plan is available now."
+    changed
+      ? "The plan change you scheduled has taken effect at the end of your " +
+          "billing period. Your subscription continues without interruption, " +
+          "now on the plan and the price below."
+      : "Thank you for choosing WHealthOS. Your subscription has been activated " +
+          "and everything on your plan is available now."
   );
   lines.push("");
   lines.push("Subscription details");

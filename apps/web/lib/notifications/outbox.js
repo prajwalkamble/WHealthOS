@@ -16,6 +16,11 @@ import { adminDb } from "@/lib/prisma";
 
 export const NOTIFICATION_EVENT = {
   SUBSCRIPTION_ACTIVATED: "SUBSCRIPTION_ACTIVATED",
+  // A live subscription moved to another plan, which lands at the end of a
+  // billing cycle. Its own member because the key below is per-event and the
+  // activation key is already spent on any subscription old enough to change
+  // plan -- reusing it would make the second email silently never send.
+  SUBSCRIPTION_PLAN_CHANGED: "SUBSCRIPTION_PLAN_CHANGED",
 };
 
 export const NOTIFICATION_STATUS = {
@@ -35,8 +40,22 @@ export const NOTIFICATION_STATUS = {
 // subscription row. A renewal does not produce a second: it does not change
 // the subscription's status, so nothing re-queues, and if something did the
 // key would already be taken.
-export const idempotencyKeyFor = (subscriptionId, event) =>
-  `${subscriptionId}:${event}`;
+//
+// `discriminator` widens that unit from "per subscription per event" to "per
+// subscription per event per thing-that-happened", and exists for one case: a
+// plan change is not unique within a subscription the way an activation is. A
+// subscription could in principle move Pro -> Intelligent and later back, and
+// with the two-part key the second move would reuse the first one's key and
+// send nothing. Passing the new plan id makes each distinct change its own
+// unit while keeping every repeat of the SAME change a duplicate, which is
+// what idempotency has to mean here.
+//
+// Omitted, it produces exactly the two-part key it always did, byte for byte,
+// so every notification row already in the database still matches.
+export const idempotencyKeyFor = (subscriptionId, event, discriminator = null) =>
+  discriminator
+    ? `${subscriptionId}:${event}:${discriminator}`
+    : `${subscriptionId}:${event}`;
 
 // How far along a status is.
 //
@@ -78,8 +97,14 @@ const reasonOf = (value) => {
  * loser is told `created: false` and does nothing, which is the success path
  * and not an error.
  */
-export async function recordOwed({ userId, subscriptionId, event, recipientEmail = null }) {
-  const idempotencyKey = idempotencyKeyFor(subscriptionId, event);
+export async function recordOwed({
+  userId,
+  subscriptionId,
+  event,
+  recipientEmail = null,
+  discriminator = null,
+}) {
+  const idempotencyKey = idempotencyKeyFor(subscriptionId, event, discriminator);
   try {
     const notification = await adminDb.subscriptionNotification.create({
       data: {

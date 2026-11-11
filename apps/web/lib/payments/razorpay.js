@@ -186,8 +186,21 @@ export async function changeSubscriptionPlan(providerSubscriptionId, { providerP
     return await api().subscriptions.update(providerSubscriptionId, {
       plan_id: providerPlanId,
       schedule_change_at: "cycle_end",
-      // Razorpay resets the cycle count when the plan changes; without this
-      // the new plan runs for the remaining count of the old one.
+      // Razorpay would otherwise email and text the customer on our behalf,
+      // about a change whose own email we send -- the same reason
+      // createSubscription above passes 0. One voice.
+      //
+      // `remaining_count` is deliberately NOT passed, and this is worth
+      // stating because the comment that used to sit here described it: it
+      // claimed to stop the new plan inheriting the old plan's remaining
+      // cycle count, above a parameter that does nothing of the sort.
+      // Whichever way Razorpay resolves the count on a plan change, nobody is
+      // affected: totalCountFor() is a ten-year horizon chosen to be
+      // unreachable, so the difference between 114 remaining months and 120
+      // is not a difference anybody experiences. Sending an unverified
+      // parameter to a live billing API to fix a comment would be the larger
+      // risk. If it ever matters, observe the subscription object after a real
+      // plan change before adding it.
       customer_notify: 0,
     });
   } catch (error) {

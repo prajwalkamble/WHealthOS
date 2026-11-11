@@ -147,7 +147,13 @@ describe("every state the review page can be in", () => {
     ["a plan this deployment cannot sell", /is not available yet/i],
     ["a payment that is still being confirmed", /being set up/i],
     ["the plan they are already on", /already on/i],
-    ["a different plan from the one they have", /One subscription at a time/i],
+    // Three views now, where there used to be one. A move between paid plans
+    // used to get a single answer -- cancel and resubscribe -- whatever the
+    // direction; since 2026-11-11 an upgrade is one step and the other two
+    // cases are not, so each has to be reachable in this file.
+    ["an upgrade they can make in one step", /Upgrade from/i],
+    ["an upgrade they have already asked for", /upgrade-scheduled/i],
+    ["a move a single step cannot make", /takes two steps rather than one/i],
   ])("has a view for %s", (_label, pattern) => {
     expect(page).toMatch(pattern);
   });
@@ -156,6 +162,51 @@ describe("every state the review page can be in", () => {
     // Six panels, and the sentence that matters in every one of them.
     const occurrences = page.match(/has been charged|been charged/g) ?? [];
     expect(occurrences.length).toBeGreaterThanOrEqual(4);
+  });
+
+  // --- The upgrade review ---------------------------------------------------
+  //
+  // The one screen in this file that offers to change a live subscription
+  // without taking a payment, which is also the thing most likely to be
+  // misread. Each of these is a sentence somebody about to press the button
+  // needs on the page, and none of them is a nicety: the whole risk of this
+  // screen is that it looks like a checkout.
+
+  it("says plainly that nothing is charged today", () => {
+    expect(page).toMatch(/Charged today/);
+    expect(page).toMatch(/Nothing is charged now/i);
+  });
+
+  it("does not borrow the purchase screen's 'Due now'", () => {
+    // "Due now" belongs to the pay screen, where an amount really is due.
+    // Reusing it here would put a figure under a heading that says it is
+    // payable, on a screen where nothing is payable.
+    const upgrade = page.slice(
+      page.indexOf('resolved.state === "upgrade"'),
+      page.indexOf('resolved.state === "other-plan"')
+    );
+    expect(upgrade.length).toBeGreaterThan(0);
+    expect(upgrade).not.toMatch(/Due now/);
+  });
+
+  it("names the date the change takes effect, or declines to invent one", () => {
+    expect(page).toMatch(/End of your current period/i);
+    expect(page).toMatch(/scheduledChangeAt/);
+  });
+
+  it("keeps the no-proration statement on the upgrade screen too", () => {
+    // The screen that changes a price is the screen that has to repeat it.
+    const occurrences = page.match(/proration/gi) ?? [];
+    expect(occurrences.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not render a pay button on the upgrade screen", () => {
+    const upgrade = page.slice(
+      page.indexOf('resolved.state === "upgrade"'),
+      page.indexOf('resolved.state === "other-plan"')
+    );
+    expect(upgrade).not.toMatch(/<PayButton/);
+    expect(upgrade).toMatch(/<UpgradeButton/);
   });
 
   it("offers a way out of each one", () => {

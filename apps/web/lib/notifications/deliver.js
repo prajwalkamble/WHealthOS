@@ -9,7 +9,12 @@ import {
   markFailed,
   markSkipped,
 } from "./outbox";
-import { SUBJECT, activationModel, activationText } from "./subscription-email";
+import {
+  activationModel,
+  activationText,
+  kindForEvent,
+  subjectFor,
+} from "./subscription-email";
 
 // Sending one notification.
 //
@@ -101,7 +106,12 @@ export async function deliverActivation(notificationId) {
   // The subscription may have been cancelled, the account deleted or the
   // email address changed between activation and this attempt, and the email
   // must describe what is true now.
-  const built = await activationModel(notification.subscriptionId);
+  // Which letter this row is for. The event is read from the row rather than
+  // carried in the job payload, so a replayed or re-swept Inngest event cannot
+  // send the wrong one.
+  const kind = kindForEvent(notification.event);
+
+  const built = await activationModel(notification.subscriptionId, { kind });
   if (built.skip) {
     await markSkipped(notification.id, built.skip);
     return { sent: false, reason: built.skip };
@@ -120,7 +130,7 @@ export async function deliverActivation(notificationId) {
   const result = await sendEmail({
     type: "subscription-confirmation",
     to: built.recipient,
-    subject: SUBJECT,
+    subject: subjectFor(kind),
     react: SubscriptionConfirmationEmail({ model: built.model }),
     // Both parts, from the same model. A transactional email with no text
     // alternative scores worse with spam filters and is unreadable in a

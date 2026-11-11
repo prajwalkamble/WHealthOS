@@ -99,12 +99,41 @@ const fakeClient = {
       found.cancel_at_cycle_end = true;
       return found;
     },
-    update: async (id, { plan_id }) => {
+    // A plan change, as Razorpay actually performs it.
+    //
+    // `schedule_change_at: "cycle_end"` does NOT move the subscription's
+    // plan_id. The subscription keeps running on the plan it is on, keeps
+    // being charged for it, and the new plan is recorded as a change that
+    // will happen -- which is why this fake records it separately instead of
+    // assigning plan_id. A fake that applied it at once would make the whole
+    // flow pass while the real thing left the account on the old plan until
+    // the cycle turned, and that difference IS the feature.
+    update: async (id, { plan_id, schedule_change_at }) => {
       const found = remote.get(id);
-      found.plan_id = plan_id;
+      if (schedule_change_at === "cycle_end") {
+        found.has_scheduled_changes = true;
+        found.pending_plan_id = plan_id;
+      } else {
+        found.plan_id = plan_id;
+      }
       return found;
     },
   },
+};
+
+// The cycle turning: Razorpay charges the next period and, if a plan change
+// was scheduled, this is the moment it takes effect.
+const renews = (id, { start = new Date(), end = new Date(Date.now() + 30 * 86_400_000) } = {}) => {
+  const found = remote.get(id);
+  if (found.has_scheduled_changes && found.pending_plan_id) {
+    found.plan_id = found.pending_plan_id;
+    found.has_scheduled_changes = false;
+    found.pending_plan_id = null;
+  }
+  found.status = "active";
+  found.current_start = seconds(start);
+  found.current_end = seconds(end);
+  return found;
 };
 
 const seconds = (date) => Math.floor(date.getTime() / 1000);
@@ -1043,11 +1072,54 @@ describe("what the review page decides", () => {
     expect(await state("pro", "monthly")).toMatchObject({ state: "already-on-plan" });
   });
 
-  it("sends somebody on another plan to the change flow", async () => {
+  it("offers a Pro subscriber a one-step upgrade to Intelligent", async () => {
     await activated(alice.id, "pro", "monthly");
     const resolved = await state("intelligent", "monthly");
-    expect(resolved.state).toBe("other-plan");
+    expect(resolved.state).toBe("upgrade");
     expect(resolved.subscription.planId).toBe("pro");
+    expect(resolved.upgrade).toMatchObject({ from: "pro" });
+    // The date the change lands is the end of the period already paid for --
+    // not today, and not computed by the page.
+    expect(resolved.upgrade.effectiveFrom).toBeInstanceOf(Date);
+    expect(resolved.upgrade.effectiveFrom.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("does not offer a downgrade as a one-step move", async () => {
+    await activated(alice.id, "intelligent", "monthly");
+    const resolved = await state("pro", "monthly");
+    // Still the two-step panel. A move down mid-period is the case that would
+    // need a part-period refund, and there is no policy for one.
+    expect(resolved.state).toBe("other-plan");
+  });
+
+  it("does not offer a change of billing period as a one-step move", async () => {
+    await activated(alice.id, "pro", "monthly");
+    const resolved = await state("pro", "yearly");
+    expect(resolved.state).toBe("other-plan");
+  });
+
+  it("will not offer an upgrade from a subscription that is not active", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    providerSays(checkout.subscriptionId, "halted");
+    await service.syncFromProvider(checkout.subscriptionId);
+    const resolved = await state("intelligent", "monthly");
+    expect(resolved.state).toBe("other-plan");
+  });
+
+  it("reports an upgrade already asked for instead of offering it again", async () => {
+    await activated(alice.id, "pro", "monthly");
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+
+    const resolved = await state("intelligent", "monthly");
+    expect(resolved.state).toBe("upgrade-scheduled");
+    // Named and priced from the stored schedule, so the screen can say what
+    // is coming and what it will cost.
+    expect(resolved.scheduled).toMatchObject({ planId: "intelligent", name: "Intelligent" });
+    expect(resolved.subscription.scheduledPlanId).toBe("intelligent");
   });
 
   it("mentions a resumable attempt rather than looking like a second charge", async () => {
@@ -1127,5 +1199,354 @@ describe("cancelling", () => {
       code: "NO_SUBSCRIPTION",
       status: 404,
     });
+  });
+});
+
+// --- The Pro-to-Intelligent upgrade -----------------------------------------
+//
+// Built 2026-11-11. One step, applied at the end of the period already paid
+// for, and no money moves at the moment somebody asks for it.
+//
+// What these tests are really about is the gap between asking and arriving.
+// That gap is weeks long, it is the whole of the product decision behind this
+// feature, and it is where every way of getting this wrong lives: granting
+// Intelligent on the click, losing the request before the cycle turns, writing
+// the new plan at Razorpay and never writing it here, or announcing it twice.
+//
+// The fake provider models `schedule_change_at: "cycle_end"` the way Razorpay
+// does -- the subscription's plan_id does not move until renews() is called --
+// because a fake that applied the change at once would make all of this pass
+// while the real thing left the account on Pro.
+describe("upgrading a live Pro subscription to Intelligent", () => {
+  const notificationsFor = (subscriptionRowId) =>
+    admin.subscriptionNotification.findMany({
+      where: { subscriptionId: subscriptionRowId },
+      select: { event: true, idempotencyKey: true, status: true },
+      orderBy: { queuedAt: "asc" },
+    });
+
+  const rowFor = (providerSubscriptionId) =>
+    admin.subscription.findUnique({ where: { providerSubscriptionId } });
+
+  it("schedules the change at the provider without moving the plan", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+
+    const result = await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+
+    expect(result).toMatchObject({ scheduled: true, planId: "intelligent", from: "pro" });
+
+    // Razorpay was told, and told the right way: scheduled, not immediate.
+    const provider = remote.get(checkout.subscriptionId);
+    expect(provider.has_scheduled_changes).toBe(true);
+    expect(provider.pending_plan_id).toBe("plan_int_monthly");
+    expect(provider.plan_id, "the live plan must not move yet").toBe("plan_pro_monthly");
+
+    // And our row records the request without claiming it has happened.
+    const row = await rowFor(checkout.subscriptionId);
+    expect(row.planId, "entitlement must still be Pro").toBe("pro");
+    expect(row.scheduledPlanId).toBe("intelligent");
+    expect(row.scheduledInterval).toBe("MONTHLY");
+    expect(row.scheduledChangeAt).toBeInstanceOf(Date);
+  });
+
+  it("keeps Pro access and withholds Intelligent until the change lands", async () => {
+    await activated(alice.id, "pro", "monthly");
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+
+    // §8 of the brief, and the half that is easy to get wrong: asking for an
+    // upgrade must not grant it. They are still paying the Pro price for this
+    // period, so they still have exactly Pro.
+    await expect(service.effectivePlanId(alice.id)).resolves.toBe("pro");
+    await expect(requireFeature(alice.id, "budgets")).resolves.toBe("pro");
+    await expect(requireFeature(alice.id, "dashboard.basic")).resolves.toBe("pro");
+    await expect(requireFeature(alice.id, "ai.queries")).rejects.toBeInstanceOf(
+      EntitlementError
+    );
+  });
+
+  it("moves the plan, and the entitlements with it, when the cycle turns", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+
+    // The cycle turns and Razorpay charges the new plan. This is the only
+    // moment the upgrade becomes real, and it reaches us as a webhook.
+    renews(checkout.subscriptionId);
+    await processEvent({
+      eventId: `evt_${randomUUID()}`,
+      body: delivery("subscription.charged", checkout.subscriptionId, {
+        payment: {
+          entity: {
+            id: `pay_${randomUUID().replace(/-/g, "").slice(0, 14)}`,
+            status: "captured",
+            amount: 129_900,
+            currency: "INR",
+            created_at: Math.floor(Date.now() / 1000),
+          },
+        },
+      }),
+    });
+
+    const row = await rowFor(checkout.subscriptionId);
+    // The defect this feature could not have shipped without: before
+    // syncFromProvider learned to write planId, this stayed "pro" for ever
+    // while Razorpay charged the Intelligent price.
+    expect(row.planId).toBe("intelligent");
+    expect(row.providerPlanId).toBe("plan_int_monthly");
+    expect(row.status).toBe("ACTIVE");
+
+    // The schedule is spent, so no screen goes on promising a change that has
+    // already happened.
+    expect(row.scheduledPlanId).toBeNull();
+    expect(row.scheduledInterval).toBeNull();
+    expect(row.scheduledChangeAt).toBeNull();
+
+    // And the entitlement follows the row, through the same engine every
+    // other surface authorises against.
+    await expect(service.effectivePlanId(alice.id)).resolves.toBe("intelligent");
+    await expect(requireFeature(alice.id, "ai.queries")).resolves.toBe("intelligent");
+    await expect(requireFeature(alice.id, "budgets")).resolves.toBe("intelligent");
+  });
+
+  it("announces the change exactly once, under its own event", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    const before = await rowFor(checkout.subscriptionId);
+    expect(await notificationsFor(before.id)).toHaveLength(1);
+
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+    // Asking for it announces nothing: there is nothing to tell somebody
+    // about a charge that has not happened on a plan they do not yet have.
+    expect(await notificationsFor(before.id)).toHaveLength(1);
+
+    renews(checkout.subscriptionId);
+    const charged = () =>
+      processEvent({
+        eventId: `evt_${randomUUID()}`,
+        body: delivery("subscription.charged", checkout.subscriptionId),
+      });
+    await charged();
+
+    const after = await notificationsFor(before.id);
+    expect(after).toHaveLength(2);
+    expect(after[1].event).toBe("SUBSCRIPTION_PLAN_CHANGED");
+    // The key carries the plan, so a later, different change is its own email
+    // while every repeat of this one is a duplicate.
+    expect(after[1].idempotencyKey).toBe(`${before.id}:SUBSCRIPTION_PLAN_CHANGED:intelligent`);
+
+    // A second and third delivery of the same thing. Still two rows: the
+    // status did not move, so the activation guard does nothing, and the plan
+    // now matches, so the plan-change guard does nothing either.
+    await charged();
+    await charged();
+    expect(await notificationsFor(before.id)).toHaveLength(2);
+  });
+
+  it("does not re-announce on an ordinary renewal afterwards", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    const row = await rowFor(checkout.subscriptionId);
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+    renews(checkout.subscriptionId);
+    await processEvent({
+      eventId: `evt_${randomUUID()}`,
+      body: delivery("subscription.charged", checkout.subscriptionId),
+    });
+    expect(await notificationsFor(row.id)).toHaveLength(2);
+
+    // A month later, another charge on the same plan. Nothing changed, so
+    // nobody is told anything.
+    renews(checkout.subscriptionId);
+    await processEvent({
+      eventId: `evt_${randomUUID()}`,
+      body: delivery("subscription.charged", checkout.subscriptionId),
+    });
+    expect(await notificationsFor(row.id)).toHaveLength(2);
+  });
+
+  it("survives a stale delivery arriving after the change landed", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+    renews(checkout.subscriptionId);
+    await processEvent({
+      eventId: `evt_${randomUUID()}`,
+      body: delivery("subscription.charged", checkout.subscriptionId),
+    });
+    expect((await rowFor(checkout.subscriptionId)).planId).toBe("intelligent");
+
+    // A week-old `subscription.updated`, delivered late. No event payload is
+    // ever the source of state -- it only prompts another question to
+    // Razorpay -- so a stale one cannot walk the plan backwards.
+    await processEvent({
+      eventId: `evt_${randomUUID()}`,
+      body: {
+        event: "subscription.updated",
+        created_at: seconds(new Date(Date.now() - 7 * 86_400_000)),
+        payload: {
+          subscription: {
+            entity: { ...remote.get(checkout.subscriptionId), plan_id: "plan_pro_monthly" },
+          },
+        },
+      },
+    });
+
+    const row = await rowFor(checkout.subscriptionId);
+    expect(row.planId, "a stale event must not downgrade anybody").toBe("intelligent");
+    await expect(requireFeature(alice.id, "ai.queries")).resolves.toBe("intelligent");
+  });
+
+  it("leaves the plan alone when the provider reports one it does not know", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    // A Plan created in the dashboard that this deployment has no variable
+    // for -- the normal state when test and live keys share a merchant
+    // account. Guessing here would change what somebody is entitled to.
+    remote.get(checkout.subscriptionId).plan_id = "plan_someone_elses";
+    await service.syncFromProvider(checkout.subscriptionId);
+
+    const row = await rowFor(checkout.subscriptionId);
+    expect(row.planId).toBe("pro");
+    expect(row.providerPlanId).toBe("plan_pro_monthly");
+  });
+
+  it("refuses an upgrade to the plan they are already on", async () => {
+    await activated(alice.id, "intelligent", "monthly");
+    await expect(
+      service.requestPlanChange({ userId: alice.id, planId: "intelligent", interval: "monthly" })
+    ).rejects.toMatchObject({ code: "NO_CHANGE" });
+  });
+
+  it("refuses a downgrade and a billing-period change, each by name", async () => {
+    await activated(alice.id, "intelligent", "monthly");
+    await expect(
+      service.requestPlanChange({ userId: alice.id, planId: "pro", interval: "monthly" })
+    ).rejects.toMatchObject({ code: "NOT_AN_UPGRADE" });
+
+    await expect(
+      service.requestPlanChange({ userId: alice.id, planId: "intelligent", interval: "yearly" })
+    ).rejects.toMatchObject({ code: "NOT_AN_UPGRADE" });
+  });
+
+  it("refuses an upgrade with no subscription to upgrade", async () => {
+    await expect(
+      service.requestPlanChange({ userId: alice.id, planId: "intelligent", interval: "monthly" })
+    ).rejects.toMatchObject({ code: "NO_SUBSCRIPTION" });
+  });
+
+  it("cannot be pointed at somebody else's subscription", async () => {
+    // Bob pays. Alice asks to upgrade. The function takes a userId and reads
+    // the subscription from the database, so there is nothing for Alice to
+    // name -- which is the point: the request carries no subscription id at
+    // all.
+    await activated(bob.id, "pro", "monthly");
+
+    await expect(
+      service.requestPlanChange({ userId: alice.id, planId: "intelligent", interval: "monthly" })
+    ).rejects.toMatchObject({ code: "NO_SUBSCRIPTION" });
+
+    const bobsRow = await admin.subscription.findFirst({ where: { userId: bob.id } });
+    expect(bobsRow.planId).toBe("pro");
+    expect(bobsRow.scheduledPlanId).toBeNull();
+    await expect(service.effectivePlanId(bob.id)).resolves.toBe("pro");
+  });
+
+  it("leaves the subscription untouched when the provider refuses", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    const before = await rowFor(checkout.subscriptionId);
+
+    const failing = {
+      ...fakeClient,
+      subscriptions: {
+        ...fakeClient.subscriptions,
+        update: async () => {
+          const error = new Error("nope");
+          error.statusCode = 400;
+          throw error;
+        },
+      },
+    };
+    __setClient(failing);
+    try {
+      await expect(
+        service.requestPlanChange({
+          userId: alice.id,
+          planId: "intelligent",
+          interval: "monthly",
+        })
+      ).rejects.toThrow();
+    } finally {
+      __setClient(fakeClient);
+    }
+
+    // Nothing written. The provider call comes first precisely so that a
+    // refusal leaves no local record of a change that is not happening.
+    const after = await rowFor(checkout.subscriptionId);
+    expect(after.planId).toBe("pro");
+    expect(after.scheduledPlanId).toBeNull();
+    expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+    await expect(requireFeature(alice.id, "budgets")).resolves.toBe("pro");
+    await expect(requireFeature(alice.id, "ai.queries")).rejects.toBeInstanceOf(
+      EntitlementError
+    );
+  });
+
+  it("does not open a second subscription for an upgrade", async () => {
+    const checkout = await activated(alice.id, "pro", "monthly");
+    const openedBefore = created;
+
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+    renews(checkout.subscriptionId);
+    await processEvent({
+      eventId: `evt_${randomUUID()}`,
+      body: delivery("subscription.charged", checkout.subscriptionId),
+    });
+
+    // One subscription throughout, which is what the one-live-per-user index
+    // requires and what makes an upgrade a change rather than a purchase.
+    expect(created).toBe(openedBefore);
+    const rows = await admin.subscription.findMany({ where: { userId: alice.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].providerSubscriptionId).toBe(checkout.subscriptionId);
+  });
+
+  it("takes no payment and opens no checkout attempt", async () => {
+    await activated(alice.id, "pro", "monthly");
+    await admin.checkoutAttempt.deleteMany({});
+    const paymentsBefore = await admin.payment.count();
+
+    await service.requestPlanChange({
+      userId: alice.id,
+      planId: "intelligent",
+      interval: "monthly",
+    });
+
+    // The difference between this and a purchase, stated as a fact about the
+    // database: no attempt, no payment, no money.
+    expect(await admin.checkoutAttempt.count()).toBe(0);
+    expect(await admin.payment.count()).toBe(paymentsBefore);
   });
 });

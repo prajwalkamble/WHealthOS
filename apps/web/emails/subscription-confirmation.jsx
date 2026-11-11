@@ -66,6 +66,7 @@ const Detail = ({ label, value, last }) => (
  */
 export default function SubscriptionConfirmationEmail({ model = {} }) {
   const {
+    kind,
     userName,
     recipientEmail,
     planName,
@@ -82,6 +83,11 @@ export default function SubscriptionConfirmationEmail({ model = {} }) {
     links = {},
     supportEmail,
   } = model;
+
+  // Whether this is the plan-change letter rather than the activation one.
+  // Defaults to the activation wording, so a model written before this field
+  // existed -- or one assembled by a test -- reads exactly as it did.
+  const planChanged = kind === "plan-change";
 
   // What this tier adds over the one below it. The inherited features are not
   // listed: a confirmation email that lists all twenty features equally tells
@@ -131,15 +137,41 @@ export default function SubscriptionConfirmationEmail({ model = {} }) {
           <Section style={styles.card}>
             <BrandHeader align="left" />
 
+            {/* The only part of this template that differs between the two
+                letters it sends. A plan change is reported as something that
+                has already happened -- the cycle has turned and the new price
+                has been charged -- where an activation is a thank-you. Every
+                section below is identical for both, because the questions are
+                the same: what plan, what did it cost, when does it renew, and
+                what do I now have. */}
             <Heading style={styles.title}>
-              Your WHealthOS subscription is now active!
+              {planChanged
+                ? planName
+                  ? `Your WHealthOS plan is now ${planName}`
+                  : "Your WHealthOS plan has changed"
+                : "Your WHealthOS subscription is now active!"}
             </Heading>
 
             <Text style={styles.lede}>
-              {userName ? `Thank you, ${userName}. ` : "Thank you for choosing WHealthOS. "}
-              {planName
-                ? `Your ${planName} plan has been activated and everything on it is available right now.`
-                : "Your subscription has been activated and everything on it is available right now."}
+              {planChanged ? (
+                <>
+                  {userName ? `${userName}, ` : ""}
+                  the plan change you scheduled has taken effect at the end of
+                  your billing period.{" "}
+                  {planName
+                    ? `Your subscription continues without interruption, now on ${planName} at the price below.`
+                    : "Your subscription continues without interruption, at the plan and price below."}
+                </>
+              ) : (
+                <>
+                  {userName
+                    ? `Thank you, ${userName}. `
+                    : "Thank you for choosing WHealthOS. "}
+                  {planName
+                    ? `Your ${planName} plan has been activated and everything on it is available right now.`
+                    : "Your subscription has been activated and everything on it is available right now."}
+                </>
+              )}
             </Text>
 
             <Section style={styles.ctaSection}>

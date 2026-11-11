@@ -17,6 +17,10 @@ const read = (relative) => readFileSync(path.join(WEB, relative), "utf8");
 const flat = (relative) => read(relative).replace(/\s+/g, " ");
 
 const ROUTE = "app/api/billing/checkout/route.js";
+// The other endpoint that can put somebody on a paid plan. It takes no money,
+// but moving an account onto a plan that is no longer sold is selling it, so
+// it carries the same switch.
+const PLAN_CHANGE_ROUTE = "app/api/billing/plan-change/route.js";
 const BILLING_PAGE = "app/(checkout)/billing/page.jsx";
 const PLAN_CARD = "app/(main)/settings/_components/plan-card.jsx";
 const SETTINGS = "app/(main)/settings/page.jsx";
@@ -54,6 +58,40 @@ describe("the switch itself", () => {
     const source = read(AVAILABILITY);
     expect(source).toContain("export const plansAreOnSale");
     expect(source).toContain("BILLING_PLANS_ON_SALE");
+  });
+});
+
+describe("the upgrade endpoint refuses too", () => {
+  const route = flat(PLAN_CHANGE_ROUTE);
+
+  it("checks before it reads a plan or touches the gateway", () => {
+    const guard = route.indexOf("if (!plansAreOnSale())");
+    const gateway = route.indexOf("gatewayReady()");
+    const parse = route.indexOf("billingPlanChangeSchema.safeParse");
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard, "the refusal must come before the gateway check").toBeLessThan(gateway);
+    expect(guard, "the refusal must come before the body is parsed").toBeLessThan(parse);
+  });
+
+  it("requires a session first", () => {
+    expect(route.indexOf("await authenticate()")).toBeLessThan(
+      route.indexOf("if (!plansAreOnSale()")
+    );
+  });
+
+  it("names the refusal, and says the existing subscription is unaffected", () => {
+    expect(route).toContain("PLANS_NOT_ON_SALE");
+    // The distinction this endpoint has to draw and the checkout does not:
+    // somebody holding a live subscription while the plans are withdrawn
+    // keeps it. Refusing to MOVE it is not refusing to honour it, and a
+    // message that did not say so would read as "your subscription is gone".
+    expect(route).toMatch(/current subscription is unaffected/i);
+  });
+
+  it("offers no upgrade in Settings while the plans are withdrawn", () => {
+    // The courtesy half. `onSale &&` on the block, so the card does not
+    // advertise a move the endpoint above would refuse.
+    expect(flat(PLAN_CARD)).toMatch(/\{onSale && upgrades\.length > 0 &&/);
   });
 });
 
@@ -95,8 +133,15 @@ describe("the surfaces that offer it", () => {
   it("does not render plan tiles or a period toggle in Settings", () => {
     const card = flat(PLAN_CARD);
     expect(card).toContain("{onSale && !hasLive && (");
-    expect(card).toContain("{!onSale && !hasLive && (");
+    // The free-state panel split in two on 2026-11-10, when enforcement was
+    // switched on: the original says every feature is included at no cost,
+    // which that switch made false, so each state now has its own panel and
+    // both are gated on `enforced` so neither can be on screen while the
+    // other is the true one. Neither renders a tile or a toggle.
+    expect(card).toContain("{!onSale && !hasLive && !enforced && (");
+    expect(card).toContain("{!onSale && !hasLive && enforced && (");
     expect(card).toContain("no plan to choose and no card");
+    expect(card).toContain("belong to the paid plans");
   });
 
   it("reads the switch on the server, because the browser cannot see it", () => {

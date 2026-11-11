@@ -474,6 +474,21 @@ model Subscription {
   cancelledAt       DateTime?
   endedAt           DateTime?
 
+  // A plan change that has been scheduled at the provider but has not taken
+  // effect yet.
+  //
+  // `planId` above is what this account is entitled to RIGHT NOW and keeps
+  // saying the old plan until the billing cycle turns -- the person is still
+  // being charged for it, so they still have it. These three say what they
+  // have asked for and when it arrives. Null on every subscription that has
+  // no pending change, which is nearly all of them.
+  //
+  // Cleared by syncFromProvider() when planId catches up. Nothing else writes
+  // them, and nothing reads them to decide an entitlement.
+  scheduledPlanId   String?
+  scheduledInterval BillingInterval?
+  scheduledChangeAt DateTime?
+
   // The provider timestamp of the most recent event applied to this row.
   // A webhook older than this is stale -- deliveries arrive out of order and
   // are retried for days -- and is recorded without being applied.
@@ -770,6 +785,11 @@ model SubscriptionNotification {
 // delivery tracking are already event-agnostic.
 enum NotificationEvent {
   SUBSCRIPTION_ACTIVATED
+  // A live subscription moved to another plan. Its own member rather than a
+  // reuse of the one above, because the outbox's idempotency key is
+  // "<subscriptionId>:<event>" and the activation key is already spent on any
+  // subscription old enough to be upgraded.
+  SUBSCRIPTION_PLAN_CHANGED
 }
 
 // How far a notification has got.

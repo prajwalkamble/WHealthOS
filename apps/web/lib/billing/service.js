@@ -20,7 +20,10 @@
 
 import { randomUUID } from "node:crypto";
 import { adminDb } from "@/lib/prisma";
-import { queueActivationNotification } from "@/lib/notifications/subscription-activated";
+import {
+  queueActivationNotification,
+  queuePlanChangeNotification,
+} from "@/lib/notifications/subscription-activated";
 import { withTenant } from "@/lib/prisma";
 import {
   PaymentError,
@@ -35,6 +38,7 @@ import {
   FREE_PLAN_ID,
   catalogEntry,
   intervalEnum,
+  planFromProviderPlanId,
   rankOf,
   resolvePurchase,
   totalCountFor,
@@ -94,6 +98,13 @@ const selectSubscription = {
   cancelAtPeriodEnd: true,
   cancelledAt: true,
   endedAt: true,
+  // What has been asked for and not yet taken effect. Read everywhere a
+  // subscription is read, because every screen that shows the current plan has
+  // to be able to say "and it changes on the 11th" -- a screen that shows one
+  // without the other is how somebody comes to think their upgrade was lost.
+  scheduledPlanId: true,
+  scheduledInterval: true,
+  scheduledChangeAt: true,
   providerSubscriptionId: true,
   createdAt: true,
   updatedAt: true,
@@ -137,14 +148,33 @@ async function recentFor(userId, tx) {
 // paid period alongside a fresh Intelligent -- the higher plan wins, so an
 // upgrade is never worse than not upgrading.
 export async function effectiveSubscription(userId, { tx = null, now = new Date() } = {}) {
-  const rows = await recentFor(userId, tx);
-  const granting = rows.filter((row) => grantsAccess(row, now));
+  return bestGranting(await recentFor(userId, tx), now);
+}
+
+// The same decision, over rows somebody already has in hand.
+//
+// Pure, and exported because one caller cannot afford the query above. The app
+// shell needs the plan on every navigation -- it decides whether the assistant
+// is mounted at all -- and lib/checkUser.js is already fetching the account
+// row, so it includes the recent subscriptions in that fetch and asks this
+// instead of opening two more tenant transactions per page.
+//
+// Shared rather than reimplemented there: "which subscription grants the most"
+// is a rule with a real edge -- a cancelled Pro inside its paid period beside a
+// fresh Intelligent -- and two copies of it would eventually disagree about
+// which plan somebody is on, in the two places most likely to be compared.
+export const bestGranting = (rows, now = new Date()) => {
+  const granting = (rows ?? []).filter((row) => grantsAccess(row, now));
   if (granting.length === 0) return null;
 
   return granting.reduce((best, row) =>
     rankOf(row.planId) > rankOf(best.planId) ? row : best
   );
-}
+};
+
+// The plan to authorise against, from rows in hand. Free when nothing grants.
+export const planIdFromRows = (rows, now = new Date()) =>
+  bestGranting(rows, now)?.planId ?? FREE_PLAN_ID;
 
 // The plan to authorise against. Free when nothing grants anything, which is
 // the state every account is in until it pays.
@@ -342,7 +372,13 @@ export async function startCheckout({ userId, planId, interval }) {
     }
     throw new BillingError(
       "SUBSCRIPTION_EXISTS",
-      "You already have a subscription. Change or cancel it before starting another.",
+      // Named the actual route, 2026-11-10. It used to say "Change or cancel
+      // it", and there is no change: requestPlanChange() below has no caller,
+      // no route and no control, so the only move between paid plans is
+      // cancel, wait out the paid period, subscribe again. Telling somebody to
+      // do a thing the product cannot do is worse than telling them it takes
+      // two steps.
+      "You already have a subscription. Cancel it in Settings first — it keeps running to the end of the period you have paid for, and you can subscribe to another plan once it ends.",
       409
     );
   }
@@ -631,8 +667,80 @@ export async function syncFromProvider(providerSubscriptionId, { eventAt = null 
     // owed on the TRANSITION into a paid state, and sending it needs to know
     // whose subscription this is. Neither is used to decide the new state --
     // that comes from the provider, above.
-    select: { id: true, lastEventAt: true, status: true, userId: true },
+    //
+    // planId and interval are read for the same reason, one step later: a plan
+    // change is also a transition, and the only way to recognise it is to
+    // compare what the row says against what Razorpay now says.
+    select: {
+      id: true,
+      lastEventAt: true,
+      status: true,
+      userId: true,
+      planId: true,
+      interval: true,
+      // To recognise a scheduled change that has now arrived, and clear it.
+      scheduledPlanId: true,
+    },
   });
+
+  // Which of OUR plans the subscription is on now, according to Razorpay.
+  //
+  // This is the one field whose authority is the provider rather than the
+  // checkout attempt, and it is why this block exists at all. Everywhere else
+  // planId comes from the attempt written before Razorpay was called -- but a
+  // plan CHANGE happens entirely at Razorpay, at the end of a billing cycle,
+  // with no attempt and no checkout. Before this, the row's planId was written
+  // once at creation and never again: a subscription moved from Pro to
+  // Intelligent would be charged the Intelligent price by Razorpay and keep
+  // Pro entitlements here, forever, with nothing logged.
+  //
+  // `undefined` leaves the column alone, and that is the answer to both
+  // "Razorpay sent no plan id" and "it sent one this deployment does not
+  // recognise". Neither is a reason to guess, and a guess here changes what
+  // somebody is entitled to. The unrecognised case is logged, because it means
+  // the merchant account holds a Plan this deployment is not configured for.
+  const remotePlan = planFromProviderPlanId(remote.plan_id ?? null);
+  if (remote.plan_id && !remotePlan) {
+    console.error({
+      code: "RAZORPAY_UNKNOWN_PLAN_ID",
+      details: { providerSubscriptionId, providerPlanId: remote.plan_id },
+    });
+  }
+
+  // Deliberately NOT part of `state` below.
+  //
+  // `state` is spread into the create branch as well, and there the plan comes
+  // from the checkout attempt -- that is the rule the create branch's own
+  // comment states, and it is the stronger source: the attempt was written by
+  // this application before Razorpay was called. Folding these in would also
+  // have overwritten a required column with `undefined` on any subscription
+  // whose plan id did not resolve. So the provider's plan is applied only
+  // where it is the only available answer: an update to a row that already
+  // exists.
+  const remotePlanFields = remotePlan
+    ? {
+        planId: remotePlan.planId,
+        interval: remotePlan.intervalEnum,
+        providerPlanId: remote.plan_id,
+      }
+    : {};
+
+  // A scheduled change that has arrived is no longer scheduled.
+  //
+  // Cleared only when the plan Razorpay now reports is the one that was asked
+  // for. Any other reading would be wrong in a way somebody would notice:
+  // clearing on every sync would wipe a pending upgrade on the next renewal
+  // webhook, and never clearing it would leave "changes to Intelligent on the
+  // 11th" on the screen of somebody who has been on Intelligent for a month.
+  //
+  // Computed against the row as it was read above, so a replayed delivery
+  // finds the columns already null and writes nothing.
+  const scheduleLanded =
+    existing?.scheduledPlanId && remotePlan?.planId === existing.scheduledPlanId;
+
+  const clearedSchedule = scheduleLanded
+    ? { scheduledPlanId: null, scheduledInterval: null, scheduledChangeAt: null }
+    : {};
 
   const state = {
     status,
@@ -649,6 +757,8 @@ export async function syncFromProvider(providerSubscriptionId, { eventAt = null 
       where: { providerSubscriptionId },
       data: {
         ...state,
+        ...remotePlanFields,
+        ...clearedSchedule,
         // Only ever forward. The column means "the newest event applied to
         // this row", and a retry of a week-old delivery must not make it
         // claim otherwise.
@@ -668,6 +778,24 @@ export async function syncFromProvider(providerSubscriptionId, { eventAt = null 
     // of the two guards, and the one that explains itself.
     if (updated.status !== existing.status) {
       await queueActivationNotification({ ...updated, userId: existing.userId });
+    }
+
+    // A plan change is the other transition, and it is invisible to the test
+    // above: a scheduled upgrade lands on the cycle-end charge, which arrives
+    // as `subscription.charged` on a subscription that is already ACTIVE and
+    // stays ACTIVE. Status does not move, so nothing above fires -- and the
+    // activation notification could not be reused anyway, because its
+    // idempotency key was spent when this subscription was first confirmed.
+    //
+    // Its own event, for its own key. Compared against the row as it was read
+    // BEFORE the update, so a replayed webhook finds the two already equal and
+    // queues nothing.
+    if (updated.planId !== existing.planId) {
+      await queuePlanChangeNotification({
+        ...updated,
+        userId: existing.userId,
+        previousPlanId: existing.planId,
+      });
     }
 
     return updated;
@@ -817,12 +945,37 @@ export async function requestCancellation(userId) {
   return synced ?? live;
 }
 
-// Moves a live subscription to another plan at the end of the current cycle.
+// Moves a live subscription UP to a higher plan at the end of the current
+// cycle.
 //
 // The effective plan does NOT change here. It changes when Razorpay says the
-// new plan is running, which arrives as a webhook. Until then the person keeps
-// what they are paying for, which is also what they are still being charged
-// for.
+// new plan is running, which arrives as a webhook and is written by
+// syncFromProvider -- the only function that may write a plan. Until then the
+// person keeps what they are paying for, which is also what they are still
+// being charged for. That is the whole of why no money moves in this function:
+// there is nothing to charge for a period that has already been paid at the old
+// rate, and nothing to refund either.
+//
+// Upgrades only, deliberately. Three things this refuses and why:
+//
+//   a DOWNGRADE          Pro is cheaper than Intelligent, so moving down means
+//                        either giving back part of a period already paid for
+//                        or charging the old rate for a cheaper plan. Both are
+//                        proration decisions, and there is no proration policy
+//                        published anywhere in this product -- section 6 of the
+//                        Terms says so in as many words. Inventing one here
+//                        would silently decide whether somebody is owed money.
+//   an INTERVAL-ONLY     Monthly to yearly on the same plan is a billing-
+//   change               duration change, which has the same problem from the
+//                        other direction and no policy either.
+//   a NON-ACTIVE         PENDING has never been charged, PAST_DUE is a
+//   subscription         subscription whose last charge failed, and
+//                        CANCEL_SCHEDULED has been told to stop. Changing the
+//                        plan of any of them schedules a change onto a cycle
+//                        that may never arrive.
+//
+// Each refusal is its own code so the screen can say which one it is rather
+// than "that did not work".
 export async function requestPlanChange({ userId, planId, interval }) {
   const purchase = resolvePurchase(planId, interval);
   if (!purchase) {
@@ -844,6 +997,22 @@ export async function requestPlanChange({ userId, planId, interval }) {
     throw new BillingError("NO_CHANGE", "That is the plan you are already on.", 409);
   }
 
+  // The direction. Compared on the plan alone: rankOf() is the plan ladder and
+  // knows nothing about billing intervals, which is correct here -- Pro yearly
+  // to Intelligent monthly is still a move up the ladder.
+  const from = rankOf(live.planId);
+  const to = rankOf(planId);
+
+  if (to <= from) {
+    throw new BillingError(
+      "NOT_AN_UPGRADE",
+      to === from
+        ? "Changing how often you are billed is not something this page can do. Cancel in Settings and subscribe again on the period you want."
+        : "Moving to a lower plan is not something this page can do. Cancel in Settings — your subscription runs to the end of the period you have paid for — and subscribe to the other plan once it ends.",
+      409
+    );
+  }
+
   await changeSubscriptionPlan(live.providerSubscriptionId, {
     providerPlanId: purchase.providerPlanId,
   });
@@ -851,12 +1020,37 @@ export async function requestPlanChange({ userId, planId, interval }) {
   // Our row keeps the OLD plan until a webhook confirms the new one is in
   // force. Writing the new plan here would grant Intelligent features for the
   // rest of a month that was paid for at the Pro rate.
-  await adminDb.subscription.update({
+  //
+  // What IS written is the schedule: what was asked for, on what period, and
+  // when it arrives. Not providerPlanId -- that column means "the provider
+  // plan this subscription is running on", and a scheduled change does not
+  // move Razorpay's own plan_id, so syncFromProvider would read the old one
+  // back and overwrite it on the very next webhook. These three columns exist
+  // precisely so the pending change has somewhere to live that a sync will not
+  // trample.
+  const updated = await adminDb.subscription.update({
     where: { providerSubscriptionId: live.providerSubscriptionId },
-    data: { providerPlanId: purchase.providerPlanId },
+    data: {
+      scheduledPlanId: planId,
+      scheduledInterval: purchase.intervalEnum,
+      // currentEnd as it is NOW. Recorded rather than left to be read later,
+      // because currentEnd moves forward on every renewal and this date must
+      // not. Null when the provider has not told us the period end, in which
+      // case the screens say "at the end of your current billing period"
+      // rather than inventing a date.
+      scheduledChangeAt: live.currentEnd ?? null,
+    },
+    select: selectSubscription,
   });
 
-  return { scheduled: true, planId, interval, effectiveFrom: live.currentEnd ?? null };
+  return {
+    scheduled: true,
+    planId,
+    interval,
+    from: live.planId,
+    effectiveFrom: live.currentEnd ?? null,
+    subscription: updated,
+  };
 }
 
 // --- What the checkout page needs -------------------------------------------
@@ -891,10 +1085,52 @@ export async function checkoutState({ userId, planId, interval, availability = n
     }
 
     const same = live.planId === planId && live.interval === entry.intervalEnum;
+    if (same) return { state: "already-on-plan", entry, subscription: live };
+
+    // An upgrade already asked for and not yet arrived. Checked before the
+    // offer below, because the thing this person needs is the date, not the
+    // button they have already pressed -- and pressing it again would be
+    // refused by requestPlanChange anyway, after a pointless round trip to
+    // Razorpay.
+    if (live.scheduledPlanId) {
+      return {
+        state: "upgrade-scheduled",
+        entry,
+        subscription: live,
+        // The catalogue entry for what is coming, so the screen can name its
+        // price rather than only its name. Resolved server-side from the
+        // stored plan and interval, never from the URL.
+        scheduled: catalogEntry(
+          live.scheduledPlanId,
+          String(live.scheduledInterval ?? "").toLowerCase()
+        ),
+      };
+    }
+
+    // Can this live subscription be moved to the plan in the URL, in one step?
+    //
+    // Only upwards, and only from ACTIVE. The reasoning is requestPlanChange's
+    // and is not repeated here -- what matters is that this page and that
+    // function agree, so a screen never offers a move the service will refuse.
+    const upgradable =
+      live.status === SUBSCRIPTION_STATUS.ACTIVE && rankOf(planId) > rankOf(live.planId);
+
     return {
-      state: same ? "already-on-plan" : "other-plan",
+      state: upgradable ? "upgrade" : "other-plan",
       entry,
       subscription: live,
+      // What the upgrade costs and when it starts, for the review screen.
+      // effectiveFrom is the end of the period already paid for: nothing is
+      // charged before it and nothing changes before it.
+      ...(upgradable
+        ? {
+            upgrade: {
+              from: live.planId,
+              fromInterval: live.interval,
+              effectiveFrom: live.currentEnd ?? null,
+            },
+          }
+        : {}),
     };
   }
 

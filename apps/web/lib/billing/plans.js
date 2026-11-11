@@ -76,6 +76,41 @@ export const providerPlanEnvName = (planId, interval) =>
 export const providerPlanId = (planId, interval) =>
   process.env[providerPlanEnvName(planId, interval)] || null;
 
+// The other direction: Razorpay's plan id back to ours.
+//
+// Needed because a plan CHANGE is the one operation whose outcome arrives from
+// the provider rather than from a checkout attempt. Everywhere else our planId
+// comes from the attempt we wrote before calling Razorpay, so there was never
+// anything to resolve backwards. When a subscription's plan changes at cycle
+// end, the only thing that says which plan it is now is the plan id on
+// Razorpay's own subscription object -- and syncFromProvider has to turn that
+// back into "pro" or "intelligent" before entitlements can follow it.
+//
+// Built by scanning the same four environment variables providerPlanId reads,
+// so the two cannot disagree: there is one mapping, used in both directions.
+//
+// Returns null for anything unrecognised, and the caller must treat that as
+// "leave the row alone" rather than as a reason to guess. An unknown provider
+// plan id is the same class of problem as an unknown provider status, and
+// normaliseStatus() already establishes the rule: a state we cannot read is
+// not a reason to assume the best. In practice it means the merchant account
+// has a Plan this deployment is not configured for -- a second environment
+// sharing the dashboard, or a plan created by hand -- and writing a guessed
+// planId would change what somebody is entitled to.
+export function planFromProviderPlanId(value) {
+  if (typeof value !== "string" || value === "") return null;
+
+  for (const planId of paidPlanIds()) {
+    for (const interval of INTERVALS) {
+      if (providerPlanId(planId, interval) === value) {
+        return { planId, interval, intervalEnum: intervalEnum(interval) };
+      }
+    }
+  }
+
+  return null;
+}
+
 // Whether a plan and interval can be bought right now: ours to sell, priced,
 // and mapped to a provider plan.
 export const isPurchasable = (planId, interval) =>

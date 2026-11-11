@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import {
   ArrowLeft,
+  CalendarClock,
   Check,
   CircleAlert,
   Clock,
@@ -12,10 +13,11 @@ import {
 } from "lucide-react";
 import { requireBillingAccount } from "@/lib/billing/account-gate";
 import { checkoutState } from "@/lib/billing/service";
-import { displayEntry } from "@/lib/billing/plans";
+import { displayEntry, planFeatures, rankOf } from "@/lib/billing/plans";
 import { publicAvailability, plansAreOnSale } from "@/lib/billing/availability";
 import { readCheckoutParams, checkoutUrl, pricingUrl } from "@/lib/billing/checkout-url";
 import { enforcementEnabled } from "@/lib/billing/entitlements";
+import { APP_TIME_ZONE } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import PayButton from "./_components/pay-button";
+import UpgradeButton from "./_components/upgrade-button";
 
 export const metadata = {
   title: "Review your subscription · WHealthOS",
@@ -49,6 +52,14 @@ const rupees = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0,
+});
+
+// Dates on this screen, in the application's timezone rather than the
+// server's. An upgrade that starts "on 11 Dec" must not read as 10 Dec to an
+// Indian subscriber because the renewal falls after midnight UTC.
+const day = new Intl.DateTimeFormat("en-IN", {
+  dateStyle: "medium",
+  timeZone: APP_TIME_ZONE,
 });
 
 const DURATIONS = [
@@ -245,8 +256,218 @@ export default async function BillingPage({ searchParams }) {
     );
   }
 
+  // Already asked for, not yet arrived. Before the offer, because what this
+  // person needs is the date rather than the button they have already pressed.
+  if (resolved.state === "upgrade-scheduled") {
+    const current = resolved.subscription;
+    const coming = displayEntry(resolved.scheduled);
+    const when = current.scheduledChangeAt
+      ? day.format(new Date(current.scheduledChangeAt))
+      : null;
+
+    return (
+      <Panel
+        icon={CalendarClock}
+        title={
+          coming
+            ? `${coming.name} is scheduled`
+            : "A plan change is already scheduled"
+        }
+        actions={
+          <>
+            <Button asChild>
+              <Link href="/dashboard">Go to WHealthOS</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/settings#plan">Manage plan</Link>
+            </Button>
+          </>
+        }
+      >
+        You are on {titleCase(current.planId)} until{" "}
+        {when ? when : "the end of the period you have paid for"}, and
+        everything on it stays available until then.{" "}
+        {coming
+          ? `From ${when ?? "that date"} your subscription runs on ${coming.name} at ${rupees.format(coming.amountRupees)} ${coming.interval === "yearly" ? "a year" : "a month"}.`
+          : "The new plan starts then."}{" "}
+        Nothing further has been charged today.
+      </Panel>
+    );
+  }
+
+  // --- An upgrade this account can make in one step ------------------------
+  //
+  // The screen the brief's objective is really about, and the reason it is a
+  // review rather than a single button: an upgrade commits somebody to a
+  // higher price on a mandate they already signed, starting on a date they
+  // have not chosen. All three of those facts belong on screen before they
+  // press anything.
+  //
+  // Not a checkout. There is no amount due today, no Razorpay window and
+  // nothing to verify afterwards, so the summary says "due today: nothing"
+  // rather than borrowing the purchase screen's "Due now".
+  if (resolved.state === "upgrade") {
+    const current = resolved.subscription;
+    const { from, effectiveFrom } = resolved.upgrade;
+    const when = effectiveFrom ? day.format(new Date(effectiveFrom)) : null;
+    const amountLabel = rupees.format(entry.amountRupees);
+    const { added } = entry.features;
+
+    // What this upgrade actually adds over what they already have -- not what
+    // the plan adds over the one below it in the catalogue. Those differ
+    // whenever somebody skips a tier, and the catalogue's answer would list
+    // features they have been paying for for months.
+    const currentKeys = new Set(
+      planFeatures(from).added.concat(planFeatures(from).inherited).map((f) => f.key)
+    );
+    const gained = added
+      .concat(entry.features.inherited)
+      .filter((feature) => !currentKeys.has(feature.key));
+
+    return (
+      <div className="mx-auto max-w-3xl">
+        <Link
+          href="/settings#plan"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to your plan
+        </Link>
+
+        <h1 className="mt-4 text-3xl font-bold tracking-tight md:text-4xl">
+          Upgrade from {titleCase(from)} to {entry.name}
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          One step. Your {titleCase(from)} subscription is not cancelled and
+          you keep it until the period you have paid for ends.
+        </p>
+
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="text-base">What changes</CardTitle>
+            <CardDescription>
+              {entry.name}, billed {entry.intervalLabel?.toLowerCase()}.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-5">
+            <dl className="space-y-2 text-sm">
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-muted-foreground">Your plan now</dt>
+                <dd className="font-medium">{titleCase(from)}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-muted-foreground">Changes to</dt>
+                <dd className="font-medium">{entry.name}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-muted-foreground">
+                  {when ? "On" : "When"}
+                </dt>
+                <dd className="font-medium">
+                  {when ?? "End of your current period"}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-muted-foreground">
+                  {entry.name} costs
+                </dt>
+                <dd className="font-medium tabular-nums">
+                  {amountLabel} {entry.interval === "yearly" ? "a year" : "a month"}
+                </dd>
+              </div>
+              {/* The line this screen exists to be able to print. An upgrade
+                  review that showed a price without this would read as a
+                  payment screen, and somebody would reasonably expect a card
+                  form next. */}
+              <div className="flex items-baseline justify-between gap-4 border-t pt-3">
+                <dt className="font-semibold">Charged today</dt>
+                <dd className="text-lg font-bold">Nothing</dd>
+              </div>
+            </dl>
+
+            {gained.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold">
+                  What you gain over {titleCase(from)}
+                </h2>
+                <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {gained.map((feature) => (
+                    <li key={feature.key} className="flex gap-2 text-sm">
+                      <Check
+                        className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                        aria-hidden
+                      />
+                      <span>{feature.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="rounded-lg border bg-muted/40 p-4 text-sm leading-6">
+              <h2 className="font-semibold">How this upgrade is billed</h2>
+              <ul className="mt-2 space-y-1.5 text-muted-foreground">
+                <li>
+                  Nothing is charged now. The period you are in has been paid
+                  for at the {titleCase(from)} price and stays at it.
+                </li>
+                <li>
+                  {when
+                    ? `On ${when} the subscription renews as ${entry.name} and ${amountLabel} is charged, then ${entry.renewal} until you cancel.`
+                    : `At the end of this period the subscription renews as ${entry.name} and ${amountLabel} is charged, then ${entry.renewal} until you cancel.`}
+                </li>
+                <li>
+                  {entry.name} features become available on that date, not
+                  today. Until then you keep {titleCase(from)} in full.
+                </li>
+                <li>
+                  Nothing is charged twice over for the same period, and no
+                  part-period amount is refunded or credited &mdash; we do not
+                  calculate proration.
+                </li>
+                <li>{entry.tax.note}</li>
+              </ul>
+              <p className="mt-3 text-xs text-muted-foreground">
+                By continuing you agree to the{" "}
+                <Link href="/terms#plans" className="underline underline-offset-4">
+                  Terms of Service
+                </Link>
+                , including the billing terms in section 6.
+              </p>
+            </div>
+
+            <UpgradeButton
+              planId={entry.planId}
+              interval={entry.interval}
+              planName={entry.name}
+              amountLabel={amountLabel}
+              effectiveLabel={when ? `On ${when}` : null}
+            />
+
+            <p className="text-xs text-muted-foreground">
+              Would rather not?{" "}
+              <Link href="/settings#plan" className="underline underline-offset-4">
+                Your plan stays exactly as it is
+              </Link>
+              , and you can cancel it there at any time instead.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Everything a one-step move cannot cover: a downgrade, a change of billing
+  // period, or a subscription that is not ACTIVE. Each of those is a proration
+  // or a scheduling question nobody has written a policy for, so the honest
+  // answer is still cancel-and-resubscribe -- and this panel says which of the
+  // two reasons applies rather than giving one answer to three situations.
   if (resolved.state === "other-plan") {
     const current = resolved.subscription;
+    const downgrade = rankOf(entry.planId) < rankOf(current.planId);
+    const sameTier = rankOf(entry.planId) === rankOf(current.planId);
+
     return (
       <Panel
         icon={Repeat}
@@ -254,7 +475,7 @@ export default async function BillingPage({ searchParams }) {
         actions={
           <>
             <Button asChild>
-              <Link href="/settings#plan">Manage plan</Link>
+              <Link href="/settings#plan">Cancel in Settings</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/pricing">Compare plans</Link>
@@ -262,10 +483,15 @@ export default async function BillingPage({ searchParams }) {
           </>
         }
       >
-        One subscription at a time. Moving to {entry.name} is a change to the
-        one you have rather than a second purchase — it is made in Settings,
-        and it takes effect at the end of the period you have already paid for,
-        so you are never charged twice over for the same month.
+        {downgrade
+          ? `Moving down to ${entry.name} takes two steps rather than one, because the period you are in has been paid for at the ${titleCase(current.planId)} price and we do not calculate part-period refunds. `
+          : sameTier
+            ? `Changing how often you are billed takes two steps rather than one, for the same reason a refund would: the period you are in has been paid for on the plan you are on. `
+            : `Moving to ${entry.name} takes two steps rather than one while this subscription is ${String(current.status).toLowerCase().replace(/_/g, " ")}. `}
+        Cancel the subscription you have in Settings, which leaves it running
+        to the end of the period you have already paid for, then come back and
+        subscribe once it has ended. You are never charged twice over for the
+        same period.
       </Panel>
     );
   }

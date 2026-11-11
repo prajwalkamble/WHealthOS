@@ -3,7 +3,7 @@
 import { useState } from "react";
 import PrefetchLink from "@/components/navigation/prefetch-link";
 import { BILLING_PERIODS } from "@/data/pricing";
-import { paidPlans, rupeesFor } from "@/lib/billing/plans";
+import { paidPlans, rankOf, rupeesFor } from "@/lib/billing/plans";
 import { canSell } from "@/lib/billing/availability";
 import { checkoutUrl } from "@/lib/billing/checkout-url";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,9 @@ const rupees = new Intl.NumberFormat("en-IN", {
 });
 
 const day = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" });
+
+const titleCase = (value) =>
+  `${String(value)[0]?.toUpperCase() ?? ""}${String(value).slice(1)}`;
 
 const PLANS = paidPlans();
 
@@ -70,6 +73,12 @@ const TONES = {
 const PlanCard = ({
   summary,
   enforced,
+  // Whether the development entitlement override is unlocking this account.
+  // Resolved on the server -- the override's variables are not NEXT_PUBLIC_ --
+  // and used for nothing but the statement below. It is not the
+  // authorisation, so a browser setting it to true gets the paragraph and
+  // nothing else.
+  devAccess = false,
   // Whether plans are offered at all. Read on the server -- the switch is a
   // plain environment variable, not a NEXT_PUBLIC_ one, so the browser cannot
   // see it and must be told.
@@ -96,8 +105,27 @@ const PlanCard = ({
 
   // One live subscription at a time, enforced by the database. While one
   // exists the other plans are not offered as a second purchase -- that is a
-  // change, and a change goes through cancellation.
+  // change, and a change goes through cancellation or, upwards, through the
+  // one-step upgrade below.
   const hasLive = Boolean(current);
+
+  // The period this subscription is actually billed on, for the upgrade links.
+  // The column is an enum (MONTHLY / YEARLY); the URL and the catalogue speak
+  // lowercase. Falls back to the toggle only when there is no subscription to
+  // read it from, which is the case where the links are not rendered anyway.
+  const currentInterval =
+    BILLING_PERIODS.find(
+      (period) => period.id === String(current?.interval ?? "").toLowerCase()
+    )?.id ?? interval;
+
+  // Plans above this one, offered as a one-step move. Empty unless there is an
+  // ACTIVE subscription with nothing already scheduled on it -- an upgrade that
+  // has been asked for is reported in the panel above instead, because offering
+  // the same button again would only produce a refusal.
+  const upgrades =
+    current && current.status === "ACTIVE" && !current.scheduledPlanId
+      ? PLANS.filter((plan) => rankOf(plan.id) > rankOf(current.planId))
+      : [];
 
   return (
     <Card id="plan">
@@ -130,6 +158,21 @@ const PlanCard = ({
               </PrefetchLink>
               .
             </>
+          ) : enforced ? (
+            // Plans withdrawn, nothing live on the account, and enforcement
+            // on. The branch below would tell this person every feature is
+            // included, which stopped being true on 2026-11-10 -- and with
+            // nothing on sale there is no way for them to change that, so
+            // saying so plainly is the least they are owed.
+            <>
+              New subscriptions are not being sold at the moment, so this
+              account stays on the free plan and keeps the features that plan
+              includes.{" "}
+              <PrefetchLink href="/pricing" className="underline underline-offset-4">
+                What that covers
+              </PrefetchLink>
+              .
+            </>
           ) : (
             <>
               WHealthOS is free and every feature is included in your account.
@@ -144,6 +187,33 @@ const PlanCard = ({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* First, because it explains everything under it.
+
+            An account using features it has not paid for is owed an
+            explanation, and this is the only place that can give it one. It
+            names no plan on purpose: the override grants capabilities, not a
+            subscription, and the panels below go on reporting the real plan --
+            which for this account is Free. Those two statements look like a
+            contradiction unless something says why they are not, so this
+            says it rather than quietly suppressing one of them. */}
+        {devAccess && (
+          <div className="rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-200">
+            <p className="font-semibold">Development access</p>
+            <p className="mt-1">
+              Every feature is unlocked on this account by a development
+              override set in this environment&rsquo;s configuration, not by a
+              payment. Anything below about your plan is accurate and
+              unchanged: no subscription exists, nothing has been charged, and
+              no payment record was created or modified. The override is
+              switched off by removing{" "}
+              <code className="rounded bg-black/5 px-1 py-0.5 font-mono text-xs dark:bg-white/10">
+                DEV_FEATURE_OVERRIDE
+              </code>{" "}
+              and cannot operate on a deployment.
+            </p>
+          </div>
+        )}
+
         {current && state && (
           <div className={cn("rounded-lg border p-4", TONES[state.tone])}>
             <p className="text-sm font-semibold">
@@ -158,6 +228,22 @@ const PlanCard = ({
                   : `Access until ${day.format(new Date(current.currentEnd))}.`}
               </p>
             )}
+            {/* A plan change already asked for. Said here as well as on
+                /billing because this is the card somebody opens to ask "did
+                that work?", and a scheduled upgrade is otherwise invisible:
+                the status above still says Pro, correctly, because Pro is
+                what they are still being charged for. */}
+            {current.scheduledPlanId && (
+              <p className="mt-2 text-sm">
+                Changing to {titleCase(current.scheduledPlanId)}
+                {current.scheduledChangeAt
+                  ? ` on ${day.format(new Date(current.scheduledChangeAt))}`
+                  : " at the end of this period"}
+                . You keep {titleCase(current.planId)} until then, and nothing
+                further has been charged.
+              </p>
+            )}
+
             {(current.status === "ACTIVE" || current.status === "PAST_DUE") && (
               <div className="mt-3">
                 <CancelSubscription />
@@ -166,16 +252,86 @@ const PlanCard = ({
           </div>
         )}
 
+        {/* Moving UP, in one step.
+        
+            This is the whole of the upgrade entry point, and what it is not
+            matters as much as what it is: it is a link to the review screen,
+            not a control that changes anything. /billing resolves the account's
+            real subscription again, prices the target plan again, and only
+            then offers a button -- so a hand-edited href reaches a review
+            screen and buys nothing, exactly as the purchase links beside it do.
+        
+            Offered only from ACTIVE, and only for a plan above the current one.
+            Both conditions are requestPlanChange()'s, repeated here so the card
+            cannot advertise a move the service will refuse: a downgrade and a
+            change of billing period are proration questions with no published
+            policy, and a subscription that is PENDING, PAST_DUE, PAUSED or
+            already stopping has no reliable cycle to schedule onto. Those
+            still go through cancellation, which is the button above. */}
+        {onSale && upgrades.length > 0 && (
+          <div className="rounded-lg border bg-muted/40 p-4">
+            <p className="text-sm font-semibold">Move to a higher plan</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              In one step, and without cancelling first. Nothing is charged
+              today: your current period stays at the price you have paid, and
+              the new plan starts when it renews.
+            </p>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+              {upgrades.map((plan) => {
+                const amount = rupeesFor(plan, currentInterval);
+                return (
+                  <li key={plan.id}>
+                    {availability === null ||
+                    canSell(availability, plan.id, currentInterval) ? (
+                      <Button asChild variant="outline" className="w-full font-semibold">
+                        {/* The subscriber's OWN billing period, not whichever
+                            one the toggle above happens to be showing -- an
+                            upgrade keeps the period they are already on unless
+                            they deliberately change it on the review screen. */}
+                        <PrefetchLink
+                          href={checkoutUrl(plan.id, currentInterval)}
+                          intent="none"
+                        >
+                          Upgrade to {plan.name} — {rupees.format(amount)}
+                          {currentInterval === "yearly" ? "/year" : "/month"}
+                        </PrefetchLink>
+                      </Button>
+                    ) : (
+                      <Button type="button" disabled className="w-full font-semibold">
+                        {plan.name} not available yet
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         {/* The free state. Nothing to pick, so no period toggle and no plan
             tiles -- and no disabled buttons either, which would only invite
             somebody to wonder what they are missing. An account that still
             has a live subscription keeps the panel above this, including the
             way to cancel it. */}
-        {!onSale && !hasLive && (
+        {!onSale && !hasLive && !enforced && (
           <p className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
             Every feature is included at no cost — budgets, goals, analytics,
             exports and the AI features. There is no plan to choose and no card
             on file.
+          </p>
+        )}
+
+        {/* The same state with enforcement on: it names what the free plan
+            does not include rather than claiming everything is in it. Both
+            are gated on `enforced` so that neither can be the one on screen
+            while the other is true. */}
+        {!onSale && !hasLive && enforced && (
+          <p className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+            The free plan covers your accounts, transactions, cards, the
+            dashboard and the financial overview, with no card on file. Budgets,
+            goals, analytics, exports, the customisation settings and the AI
+            features belong to the paid plans, which are not on sale at the
+            moment.
           </p>
         )}
 

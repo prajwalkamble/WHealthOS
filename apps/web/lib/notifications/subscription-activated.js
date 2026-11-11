@@ -101,6 +101,80 @@ export async function queueActivationNotification(subscription) {
   }
 }
 
+/**
+ * Records that a plan-change email is owed, and asks the job runner to send it.
+ *
+ * Called from the same place and under the same guarantees as
+ * queueActivationNotification above -- syncFromProvider, after Razorpay has
+ * been asked directly what the subscription is now on. The caller compares the
+ * plan it read BEFORE the write against the plan it wrote, so a replayed
+ * webhook finds them equal and never reaches here.
+ *
+ * `previousPlanId` is used for the log line and for nothing else. It is
+ * deliberately NOT put in the email: once the row is updated the old plan is
+ * gone from the database, and an email that names it would be naming something
+ * reconstructed from an argument rather than read back from a record -- which
+ * is the one thing lib/notifications/subscription-email.js exists to prevent.
+ * Everything the email does say is read from the row after the change landed.
+ *
+ * Never throws, for the same reason: a subscription that has moved to a new
+ * plan has moved, and a notification problem must not turn that into a failure.
+ */
+export async function queuePlanChangeNotification(subscription) {
+  try {
+    if (!isConfirmable(subscription)) {
+      return { queued: false, reason: "not-confirmable" };
+    }
+
+    const user = await adminDb.user.findUnique({
+      where: { id: subscription.userId },
+      select: { email: true },
+    });
+
+    const { notification, created } = await recordOwed({
+      userId: subscription.userId,
+      subscriptionId: subscription.id,
+      event: NOTIFICATION_EVENT.SUBSCRIPTION_PLAN_CHANGED,
+      recipientEmail: user?.email ?? null,
+      // The plan now in force. Two deliveries of the same change compute the
+      // same key and the second loses; a later, different change gets its own.
+      discriminator: subscription.planId ?? null,
+    });
+
+    if (!created) {
+      return { queued: false, reason: "already-recorded", id: notification?.id ?? null };
+    }
+
+    if (!user?.email) {
+      await markSkipped(notification.id, "account has no email address");
+      return { queued: false, reason: "no-email-address", id: notification.id };
+    }
+
+    await inngest.send({
+      // The same Inngest event as an activation. The payload is a notification
+      // id and nothing else, and the row itself says which kind it is, so one
+      // job function serves both -- which is also what makes the stale-queued
+      // sweep work for this event without a second sweep.
+      name: ACTIVATION_SUBJECT_EVENT,
+      data: { notificationId: notification.id },
+    });
+
+    return { queued: true, id: notification.id };
+  } catch (error) {
+    console.error({
+      code: "SUBSCRIPTION_PLAN_CHANGE_NOTIFICATION_NOT_QUEUED",
+      details: {
+        subscriptionId: subscription?.id ?? null,
+        from: subscription?.previousPlanId ?? null,
+        to: subscription?.planId ?? null,
+        errorType: error?.name ?? "exception",
+        message: error?.message ?? null,
+      },
+    });
+    return { queued: false, reason: "error" };
+  }
+}
+
 // How far back the reconciling sweep looks.
 //
 // Bounded so the query stays an index scan over recent rows rather than a
@@ -152,7 +226,16 @@ export const subscriptionsMissingNotification = (limit = 50, now = new Date()) =
 export const staleQueued = (limit = 50, now = new Date(), olderThanMs = 10 * 60_000) =>
   adminDb.subscriptionNotification.findMany({
     where: {
-      event: NOTIFICATION_EVENT.SUBSCRIPTION_ACTIVATED,
+      // Both events, because both are delivered by the same job through the
+      // same Inngest event. Left as activation-only, a plan-change
+      // notification whose `inngest.send` never landed would sit QUEUED for
+      // ever with no sweep looking for it.
+      event: {
+        in: [
+          NOTIFICATION_EVENT.SUBSCRIPTION_ACTIVATED,
+          NOTIFICATION_EVENT.SUBSCRIPTION_PLAN_CHANGED,
+        ],
+      },
       status: NOTIFICATION_STATUS.QUEUED,
       queuedAt: { lte: new Date(now.getTime() - olderThanMs) },
     },
