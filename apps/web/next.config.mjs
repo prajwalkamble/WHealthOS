@@ -1,3 +1,5 @@
+import { buildContentSecurityPolicy, HEADER_NAME } from "./lib/security/csp.mjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // A build and `next dev` cannot share .next -- building over a running dev
@@ -30,12 +32,13 @@ const nextConfig = {
 
   // Response headers applied to every route.
   //
-  // No Content-Security-Policy. A real one here has to allow Clerk's script,
-  // its frames and its XHR hosts, the Inngest endpoint and Next's own inline
-  // bootstrap, and a CSP that is wrong does not degrade -- it blanks the app
-  // for everyone. It is worth doing properly and separately, with a
-  // report-only rollout, rather than guessed at here. X-Frame-Options covers
-  // the clickjacking case in the meantime.
+  // The Content-Security-Policy is here now, and it ships REPORT-ONLY: no
+  // browser enforces that header, so the allowlist can be proven against real
+  // traffic before it is allowed to break anything. A CSP that is wrong does
+  // not degrade, it blanks the application, which is why this is the one
+  // header that arrives in two steps. lib/security/csp.mjs says what it does
+  // and does not buy, and how to promote it. X-Frame-Options stays for older
+  // browsers that do not read frame-ancestors.
   async headers() {
     const headers = [
       // Stops the browser second-guessing a declared Content-Type, which is
@@ -63,6 +66,17 @@ const nextConfig = {
           "usb=(), interest-cohort=()",
       },
     ];
+
+    // The CSP, built from the publishable key rather than a hardcoded host, so
+    // development, preview and production each get their own correct Clerk
+    // origin with no second place to update.
+    headers.push({
+      key: HEADER_NAME,
+      value: buildContentSecurityPolicy({
+        publishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+        isProduction: process.env.NODE_ENV === "production",
+      }),
+    });
 
     // HSTS only where there is TLS to insist on. Sending it from a local dev
     // server pins http://localhost to https for the browser's whole profile.

@@ -19,6 +19,7 @@ import { PreferencesProvider } from "@/components/preferences-provider";
 import { siteUrl } from "@/lib/site";
 import { OG_IMAGE } from "@/lib/brand/identity.mjs";
 import PreferencesScript from "@/components/preferences-script";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Every family the Font and Display Font settings offer, each exposed as a
 // CSS variable that globals.css picks through --font-body / --font-display.
@@ -174,6 +175,20 @@ export default function RootLayout({ children }) {
               {children}
               <Toaster richColors />
             </PreferencesProvider>
+            {/* Vercel Speed Insights. Last in the body so it is the last thing
+                to mount and cannot delay anything above it.
+
+                On Vercel it loads /_vercel/speed-insights/script.js, which is
+                same-origin and already covered by the policy's 'self'.
+                Anywhere else it falls back to va.vercel-scripts.com, so that
+                host and the vitals endpoint are named in
+                lib/security/csp.mjs -- a script added after a CSP has to be
+                added to the CSP in the same change, or it is reported in
+                production and nobody knows why.
+
+                It measures Core Web Vitals -- load and interaction timings.
+                It sets no cookie and reads no account data. */}
+            <SpeedInsights />
           </ThemeProvider>
         </body>
       </html>
