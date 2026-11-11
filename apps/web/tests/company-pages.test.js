@@ -115,7 +115,10 @@ describe("The Company routes", () => {
       COMPANY_LINKS.blog,
     ]);
     const footer = read(FOOTER);
-    expect(footer).toContain('title: "Resources"');
+    // No Resources column any more -- it was removed on the operator's
+    // instruction, and it held one link. What this test is actually for
+    // survives it: the footer must not advertise a section that has no page,
+    // and a heading it no longer renders cannot.
     for (const absent of [
       "Documentation",
       "Help Center",

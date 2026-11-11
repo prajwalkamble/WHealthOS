@@ -671,7 +671,6 @@ describe("footer tools column", () => {
   it("reads the Company group from the company links", async () => {
     const fs = await import("node:fs");
     const source = fs.readFileSync(new URL("../components/footer.jsx", import.meta.url), "utf8");
-    expect(source).toContain('title: "Resources"');
     expect(source).toContain('title: "Company", links: [...COMPANY_NAV');
     expect(source).toContain("...COMPANY_CONTENT_LINKS");
     expect(source).toContain('from "@/lib/company/links"');

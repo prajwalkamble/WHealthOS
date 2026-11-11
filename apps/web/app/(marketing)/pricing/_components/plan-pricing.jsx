@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { publicAvailability } from "@/lib/billing/availability";
+import { enforcementEnabled } from "@/lib/billing/entitlements";
 import { PLAN_FAQS } from "@/data/pricing";
 import PricingPlans from "./pricing-plans";
 import PricingFaq from "./pricing-faq";
@@ -15,6 +16,29 @@ import PricingFaq from "./pricing-faq";
 // the plan is priced on the server and the renewal and cancellation terms are
 // stated before anybody is charged -- tests/checkout-url.test.js asserts that
 // /billing's pay button is the only surface that can open one.
+//
+// The notice below is the third copy of one sentence, and the reason there are
+// three is that this is the page people decide on. /billing says it on the
+// screen that takes the money and the Settings plan card says it to somebody
+// already paying, but both are downstream of the choice: a visitor who reads
+// a comparison table, picks Pro and clicks through has already decided by the
+// time either of those appears. The audit of 2026-11-10 recorded its absence
+// here as the one place a live checkout was advertised without it.
+//
+// Conditional on enforcementEnabled(), exactly as the other two are, so it is
+// not a sentence anybody has to remember to delete: the day plans are enforced
+// it stops rendering on all three surfaces at once. That day was 2026-11-10,
+// so it no longer renders.
+//
+// A second banner used to sit beneath it, covering the one claim enforcement
+// did not settle: the comparison table prints a transactions-per-day figure
+// for each plan and nothing applies it, because BILLING_QUOTA_ENFORCEMENT is
+// a separate switch and is still off. It was removed on the operator's
+// instruction. The disclosure itself is still on the page -- the FAQ answer
+// for "What are the transactions-per-day figures?" says they are not applied
+// to anyone today, and tests/pricing-copy.test.js asserts that an answer says
+// so for as long as the quota stays off. That assertion reads PLAN_FAQS, not
+// this file, which is why removing the banner does not fail it.
 const PlanPricing = ({ signedIn, duration }) => (
   <div className="container mx-auto px-4 pb-20">
     <div className="mx-auto max-w-2xl text-center">
@@ -32,6 +56,18 @@ const PlanPricing = ({ signedIn, duration }) => (
         deeper insights into your finances.
       </p>
     </div>
+
+    {!enforcementEnabled() && (
+      <p
+        role="status"
+        className="mx-auto mt-8 max-w-2xl rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-center text-sm leading-6 text-amber-900 dark:text-amber-200"
+      >
+        <span className="font-semibold">Worth knowing before you compare:</span>{" "}
+        plan limits are not enforced for anyone yet, so every feature below is
+        already included in the free account. Subscribing starts a real
+        recurring payment and does not change what you can do today.
+      </p>
+    )}
 
     <div className="mt-10">
       <PricingPlans
