@@ -144,6 +144,22 @@ describe("the surfaces that cost money are gated at the entrance", () => {
     expect(route.indexOf("ai.queries")).toBeLessThan(route.indexOf("runAgentTurn({"));
   });
 
+  it("checks the plan before the receipt image is read or sent", () => {
+    // Two orderings, for two different costs. The gate must come before
+    // generateContent, so a refused scan is not also a paid one -- and before
+    // the file is turned into base64, so a 4MB upload is not held in memory
+    // for a request that was never going to run.
+    const action = read("actions/transaction.js");
+    expect(action).toContain('requireFeatureInAction(userId, "ai.receipts", { tx })');
+
+    const gate = action.indexOf('"ai.receipts"');
+    const read64 = action.indexOf("Buffer.from(arrayBuffer).toString(\"base64\")");
+    const model = action.indexOf("await generateContent([");
+    expect(gate).toBeGreaterThan(-1);
+    expect(read64).toBeGreaterThan(gate);
+    expect(model).toBeGreaterThan(gate);
+  });
+
   it("checks the plan before the monthly report calls a model", () => {
     // A background job has no session, so this is the case a route-level
     // guard cannot cover: a Free account that left the Settings switch on
@@ -153,6 +169,83 @@ describe("the surfaces that cost money are gated at the entrance", () => {
     expect(job.indexOf('"ai.insights"')).toBeLessThan(
       job.indexOf("await generateFinancialInsights(stats, monthName)")
     );
+  });
+
+  it("gates the paid reads, not only the writes", () => {
+    // Finding S4. actions/budget.js and actions/goals.js have refused writes
+    // since the gates were written, while lib/queries.js handed the rows back
+    // to anybody who asked -- so an unentitled account could read every budget
+    // and goal it had created, and only discover the limit by trying to change
+    // one. Invisible while nothing was enforced.
+    const queries = read("lib/queries.js");
+    for (const key of ["budgets", "goals", "analytics"]) {
+      expect(
+        queries,
+        `the ${key} read is not gated in lib/queries.js`
+      ).toContain(`requireFeatureInAction(userId, "${key}", { tx })`);
+    }
+  });
+
+  it("gates each paid read before it reads anything", () => {
+    // Inside the tenant transaction and ahead of the fetch, so a refusal
+    // costs no query and cannot be reported after the rows are already in
+    // memory.
+    const queries = read("lib/queries.js");
+    // Sliced to the exported function's own body: the private helpers are
+    // declared earlier in the file, so a whole-file indexOf finds the
+    // declaration of goalsFor long before the gate that protects its caller.
+    const body = (name) => {
+      const from = queries.indexOf(`export async function ${name}(`);
+      expect(from, `${name} is not exported from lib/queries.js`).toBeGreaterThan(-1);
+      const to = queries.indexOf("\nexport ", from + 1);
+      return queries.slice(from, to === -1 ? undefined : to);
+    };
+
+    for (const [name, key, fetch] of [
+      ["getBudgets", "budgets", "budgetsFor(tx, userId, period)"],
+      ["getGoals", "goals", "goalsFor(tx, userId)"],
+    ]) {
+      const fn = body(name);
+      const g = fn.indexOf(`requireFeatureInAction(userId, "${key}", { tx })`);
+      const f = fn.indexOf(fetch);
+      expect(g, `${name} has no gate`).toBeGreaterThan(-1);
+      expect(f, `${name} does not call ${fetch}`).toBeGreaterThan(-1);
+      expect(f, `${name} reads rows before its gate`).toBeGreaterThan(g);
+    }
+  });
+
+  it("shows the locked state instead of an error page", () => {
+    // A server component that lets the refusal throw hands the person an
+    // error page for something that is not an error. The fetch has to live in
+    // a child so that a denied account never runs the query.
+    for (const [page, feature] of [
+      ["app/(main)/budgets/page.jsx", "budgets"],
+      ["app/(main)/goals/page.jsx", "goals"],
+      ["app/(main)/analytics/page.jsx", "analytics"],
+    ]) {
+      expect(read(page), `${page} does not render the locked state`).toContain(
+        `<FeatureGate feature="${feature}"`
+      );
+    }
+  });
+
+  it("offers the receipt scanner only to a plan that may use it", () => {
+    // The control, not the authorisation: actions/transaction.js refuses the
+    // scan regardless. A button that always fails is the thing being avoided.
+    const page = read("app/(main)/transaction/create/page.jsx");
+    expect(page).toContain('planGrants(planIdFromRows(user?.subscriptions), "ai.receipts")');
+    // And it agrees with the server about when a refusal happens, or it is a
+    // padlock over something that works.
+    expect(page).toContain("enforcementEnabled()");
+
+    const form = read("app/(main)/transaction/_components/transaction-form.jsx");
+    expect(form).toContain('<LockedReceiptScanner reason="plan" />');
+  });
+
+  it("mounts the assistant only for a plan that includes it", () => {
+    const layout = read("app/(main)/layout.js");
+    expect(layout).toContain('planGrants(planIdFromRows(user?.subscriptions), "ai.queries")');
+    expect(layout).toContain("enforcementEnabled()");
   });
 
   it("requires whatever SETTING_ENTITLEMENTS names, for the settings changing", () => {
@@ -185,5 +278,99 @@ describe("the surfaces that cost money are gated at the entrance", () => {
     // The plan is resolved from the database, never from the payload.
     expect(action).toContain("effectivePlanId(userId, { tx })");
     expect(action).not.toMatch(/data\.plan|rawData\.plan|body\.plan/);
+  });
+});
+
+// --- Every model call site is accounted for --------------------------------
+//
+// The question above is "is the matrix enforced". This one is narrower and was
+// answered by nobody: does every place that calls a model have an entitlement
+// decision recorded against it?
+//
+// Receipt scanning is why this exists. actions/transaction.js has sent photos
+// to Gemini since long before there were plans, behind a session and a rate
+// limit and no entitlement key at all -- not denied, not granted, simply not
+// considered. It was invisible because it is not a defect in any one file: the
+// engine cannot report a feature it has never been told about, and the scan
+// above cannot miss a key that was never written down. The only way to see it
+// is to start from the model calls and work back to the matrix.
+//
+// So each call site names the feature it belongs to, and the registry is
+// asserted exactly. A new model call fails this file until somebody decides
+// which plan pays for it.
+const MODEL_SURFACES = {
+  "actions/transaction.js": {
+    feature: "ai.receipts",
+    gatedIn: "actions/transaction.js",
+    why: "receipt scanning, Intelligent from 2026-11-10",
+  },
+  "lib/inngest/functions.js": {
+    feature: "ai.insights",
+    gatedIn: "lib/inngest/functions.js",
+    why: "the monthly report's written commentary",
+  },
+  "lib/ai/agent.js": {
+    feature: "ai.queries",
+    // The gate is at the route rather than here: the point is not to pay for
+    // an answer that will be refused, so it happens before the stream opens.
+    gatedIn: "app/api/ai/chat/route.js",
+    why: "the WHOS assistant",
+  },
+};
+
+// Files that reach the model, found by their import of the wrapper rather than
+// by name, so a new helper around it is still caught.
+const IMPORTS_GEMINI = /from\s+["'](?:@\/lib\/ai\/gemini|[./]+(?:lib\/ai\/)?gemini)["']/;
+
+const modelCallSites = FILES.filter((file) => {
+  const rel = path.relative(WEB, file);
+  if (rel === path.join("lib", "ai", "gemini.js")) return false; // the wrapper itself
+  return IMPORTS_GEMINI.test(readFileSync(file, "utf8"));
+}).map((file) => path.relative(WEB, file));
+
+describe("every model call site has an entitlement decision recorded", () => {
+  it("knows about exactly the call sites that exist", () => {
+    expect(
+      modelCallSites.sort(),
+      "a file calls a model without an entry in MODEL_SURFACES. Decide which " +
+        "plan includes it, give it a key in data/pricing.js, and record it here."
+    ).toEqual(Object.keys(MODEL_SURFACES).sort());
+  });
+
+  it("names a real feature for each one", () => {
+    for (const [site, { feature }] of Object.entries(MODEL_SURFACES)) {
+      expect(ENTITLEMENT_KEYS, `${site} names an unknown feature "${feature}"`)
+        .toContain(feature);
+    }
+  });
+
+  it("only leaves a call site ungated when the free plan includes it", () => {
+    // The loophole this closes: recording `gatedIn: null` for a paid surface
+    // would turn this registry into a licence to ship an unenforced feature.
+    const free = new Set(
+      FEATURES.filter((f) => f.plans.includes("free")).map((f) => f.key)
+    );
+    for (const [site, { feature, gatedIn }] of Object.entries(MODEL_SURFACES)) {
+      if (gatedIn !== null) continue;
+      expect(
+        free.has(feature),
+        `${site} is ungated but ${feature} is not on the free plan`
+      ).toBe(true);
+      expect(gated, `${feature} is free and must not be gated`).not.toContain(feature);
+    }
+  });
+
+  it("finds the gate where it says the gate is", () => {
+    for (const [site, { feature, gatedIn }] of Object.entries(MODEL_SURFACES)) {
+      if (gatedIn === null) continue;
+      const source = readFileSync(path.join(WEB, gatedIn), "utf8");
+      const keys = [...source.matchAll(GATE_CALL)].map((m) => m[1]);
+      expect(keys, `${site} says it is gated in ${gatedIn} on ${feature}`)
+        .toContain(feature);
+      // And a gated surface must be a paid one, or the gate is decoration.
+      const row = FEATURES.find((f) => f.key === feature);
+      expect(row.plans, `${feature} is gated but the free plan includes it`)
+        .not.toContain("free");
+    }
   });
 });

@@ -9,6 +9,7 @@ import { enforceRateLimit } from "@/lib/arcjet";
 import { ActionError, runAction } from "@/lib/action-error";
 import { consumeDailyTransaction, QuotaError } from "@/lib/billing/quota";
 import { effectivePlanId } from "@/lib/billing/service";
+import { requireFeatureInAction } from "@/lib/billing/guard";
 import { requireClerkUserId } from "@/lib/session";
 import { nextOccurrenceAfter } from "@/lib/recurring";
 import { balanceEffect } from "@/lib/money";
@@ -286,6 +287,26 @@ export async function scanReceipt(file) {
     // must not be reachable without a session or past the rate limit.
     const clerkUserId = await requireClerkUserId();
     await enforceRateLimit("receiptScan", clerkUserId);
+
+    // And guarded on the plan, from 2026-11-10. Receipt scanning is an
+    // Intelligent feature -- it reaches a model, and that is the line the
+    // pricing table now draws.
+    //
+    // Before the file is read and before Gemini is called, in that order and
+    // for two different reasons: the point of a gate on a metered feature is
+    // not to pay for a refused answer, and a 4MB image should not be
+    // base64-encoded in memory for a request that is going to be refused
+    // anyway. tests/entitlement-coverage.test.js asserts both positions.
+    //
+    // The plan comes from the database through effectivePlanId, inside its own
+    // tenant transaction -- never from the payload, and there is no payload
+    // here but a file. requireFeatureInAction rather than requireFeature
+    // because this is a server action: it throws an ActionError whose message
+    // names the plan that would fix it, and runAction is what puts that in
+    // front of the person.
+    await withCurrentTenant(async (tx, userId) => {
+      await requireFeatureInAction(userId, "ai.receipts", { tx });
+    });
 
     if (!file || typeof file.arrayBuffer !== "function") {
       throw new ActionError("No receipt image provided");

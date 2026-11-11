@@ -21,9 +21,16 @@ import { ReceiptScanner } from './receipt-scanner';
 import { useCurrency } from '@/components/currency-provider';
 import Link from 'next/link';
 
-// Stands in for the scanner in demo mode, saying plainly why it is
-// unavailable and where to go, rather than showing a button that fails.
-const LockedReceiptScanner = () => (
+// Stands in for the scanner when it is not available, saying plainly why and
+// where to go, rather than showing a button that fails.
+//
+// Two reasons it is not, and they need different words and different
+// destinations: demo mode, because a scan is a Gemini request and the rate
+// limiter keys on a signed-in account; and a plan without it, since 2026-11-10,
+// when receipt scanning became an Intelligent feature. The page decides which
+// -- see mayScan() in ../create/page.jsx -- and actions/transaction.js refuses
+// the scan regardless of what is rendered here.
+const LockedReceiptScanner = ({ reason = "guest" }) => (
   <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-4">
     <div className="flex items-start gap-3">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -32,12 +39,18 @@ const LockedReceiptScanner = () => (
       <div>
         <p className="text-sm font-medium">Scan Receipt with AI</p>
         <p className="text-sm text-muted-foreground">
-          Available once you create an account.
+          {reason === "plan"
+            ? "Part of the Intelligent plan."
+            : "Available once you create an account."}
         </p>
       </div>
     </div>
     <Button asChild size="sm" variant="outline">
-      <Link href="/sign-up">Create account</Link>
+      {reason === "plan" ? (
+        <Link href="/pricing">See plans</Link>
+      ) : (
+        <Link href="/sign-up">Create account</Link>
+      )}
     </Button>
   </div>
 );
@@ -53,6 +66,9 @@ export function AddTransactionForm ({
   initialData = null,
   guest = false,
   onGuestSubmit,
+  // Resolved on the server by the page that renders this -- never decided
+  // here, and never the authority: the action checks the plan again.
+  canScan = true,
 }) {
   const router = useRouter();
   // Aliased: `format` in this file is date-fns'. The balance beside each
@@ -165,13 +181,17 @@ export function AddTransactionForm ({
 
   return (
     <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-        {/* AI Receipt Scanner. Locked in demo mode: a scan is a Gemini
-            request, and the rate limiter keys on a signed-in user. */}
+        {/* AI Receipt Scanner. Locked in demo mode, because a scan is a
+            Gemini request and the rate limiter keys on a signed-in user, and
+            locked without the plan for it, because the action will refuse
+            it. */}
         {!editMode &&
           (guest ? (
-            <LockedReceiptScanner />
-          ) : (
+            <LockedReceiptScanner reason="guest" />
+          ) : canScan ? (
             <ReceiptScanner onScanComplete={handleScanComplete} />
+          ) : (
+            <LockedReceiptScanner reason="plan" />
           ))}
 
       {/* Type */}

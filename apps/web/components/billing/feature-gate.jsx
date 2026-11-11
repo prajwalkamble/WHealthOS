@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
 
+import { devGrantsAll } from "@/lib/billing/dev-override";
 import { enforcementEnabled, planGrants, smallestPlanWith } from "@/lib/billing/entitlements";
 import { effectivePlanId } from "@/lib/billing/service";
 import { getCurrentUserId } from "@/lib/prisma";
@@ -27,6 +28,12 @@ import { cn } from "@/lib/utils";
 async function denied(feature) {
   if (!enforcementEnabled()) return false;
   const userId = await getCurrentUserId();
+  // The development override, asked here for the same reason enforcementEnabled
+  // is: this has to agree with the server about when a refusal would actually
+  // happen. lib/billing/guard.js lets this account through every gate, so a
+  // padlock drawn over a control that works would be exactly the lie the
+  // comment above warns about -- and it saves the query below.
+  if (devGrantsAll(userId)) return false;
   return !planGrants(await effectivePlanId(userId), feature);
 }
 

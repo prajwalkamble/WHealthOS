@@ -26,18 +26,31 @@ const inDevelopment = () => process.env.NODE_ENV !== "production";
 // question: a perfectly configured gateway must still sell nothing while the
 // plans are discontinued.
 //
-// Off, because every feature is free to every account. /pricing says so,
-// lib/billing/entitlements.js grants everything while BILLING_ENFORCEMENT is
-// unset, and the Terms have always said that paying unlocks nothing. A
-// checkout left reachable alongside those three would charge somebody for
-// what their neighbour has for free -- which the Terms then oblige us to
-// refund, so the only thing it can produce is a refund and a complaint.
+// This was switched off for a while, and the reasoning is worth keeping
+// because it is the reasoning that still governs the flag: a checkout left
+// reachable while entitlements are unenforced charges somebody for what their
+// neighbour has for free -- which the Terms then oblige us to refund, so the
+// only thing it can produce is a refund and a complaint.
 //
-// Nothing was deleted to turn this off. The catalogue, the checkout, the
-// webhook and the entitlement keys are all intact: set BILLING_PLANS_ON_SALE
-// to "on" and the plans are for sale again. That is deliberate -- this is a
-// decision somebody may want back, and a decision you can reverse is a
-// different thing from a feature you have to rebuild.
+// Updated 2026-11-10. This comment used to open "Off, because every feature is
+// free to every account" and go on to say that the Terms had always said
+// paying unlocks nothing. All three parts had gone stale: the flag is set in
+// the environment, /pricing renders the paid comparison, and section 6 of the
+// Terms was rewritten on 2026-11-01 to announce enforcement. A comment that
+// states a deployment's configuration as fact is a comment that will be wrong
+// eventually, so this one no longer does -- plansAreOnSale() below is the
+// answer.
+//
+// The pairing is the thing to get right, and it is not enforced here: selling
+// while BILLING_ENFORCEMENT is unset is the state the audit found, and
+// billingPolicyContradictions() in lib/security/required-config.js is what
+// reports it at boot in production.
+//
+// Nothing was deleted when it was off. The catalogue, the checkout, the
+// webhook and the entitlement keys stayed intact, which is why setting
+// BILLING_PLANS_ON_SALE back to "on" was all it took. That is deliberate -- a
+// decision you can reverse is a different thing from a feature you have to
+// rebuild.
 export const plansAreOnSale = () =>
   String(process.env.BILLING_PLANS_ON_SALE ?? "").toLowerCase() === "on";
 

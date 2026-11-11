@@ -62,29 +62,59 @@ export const TERMS = {
   // be rewritten with a version bump. That is not left to memory:
   // tests/legal-consistency.test.js fails the build if enforcement is on
   // while checkoutIntegratedButSellsNothing is still true.
-  // Changed 2026-11-01, with a version bump. BILLING_ENFORCEMENT is on:
-  // requireEntitlement() now refuses, so a plan is the difference between
-  // having Budgets, Goals, Analytics, export and the AI features and not
-  // having them. Both flags below therefore flip, and section 6 was rewritten
-  // in the same change -- it previously promised, in terms, that this would
-  // not happen without new terms published first.
+  // Changed 2026-11-01, with a version bump, on the understanding that
+  // BILLING_ENFORCEMENT was on: requireEntitlement() would refuse, so a plan
+  // would be the difference between having Budgets, Goals, Analytics, export
+  // and the AI features and not having them. Both flags below were flipped and
+  // section 6 was rewritten in the same change.
+  //
+  // That 2026-11-01 premise was wrong, and for nine days these flags described
+  // a product that did not exist. BILLING_ENFORCEMENT was never set in any
+  // environment anybody checked, so requireEntitlement() logged
+  // ENTITLEMENT_WOULD_DENY and returned, and every paid feature remained open
+  // to every account -- the exact failure the top of this file warns about.
+  // The subscription audit in docs/testing/ found it on 2026-11-10.
+  //
+  // RESOLVED 2026-11-10 by setting the variable rather than by withdrawing the
+  // claim: BILLING_ENFORCEMENT is now "on", so both flags below are true of
+  // the running product for the first time, and section 6 carries today's
+  // version. A draft that went the other way -- keeping enforcement off and
+  // retracting the claim -- was written and not shipped.
+  //
+  // The lesson is unchanged by which resolution was chosen, and is the part
+  // that will matter next time: these values describe the RUNNING product, not
+  // an intention about it. The only honest source for "is enforcement on" is
+  // the environment the code reads, enforcementEnabled() in
+  // lib/billing/entitlements.js, and a flag set here in anticipation of a
+  // deployment is a false statement in a contract until that deployment
+  // happens. What now notices the gap is billingPolicyContradictions() in
+  // lib/security/required-config.js, at boot, in the deployment itself.
   //
   // Answers "can somebody obtain a paid plan", meaning the capability set the
-  // pricing page attaches to one. They can, and it is enforced.
+  // pricing page attaches to one. They can: a subscription is real, recurring,
+  // and now the difference between having Budgets, Goals, Analytics, export
+  // and the AI features and not having them.
   paidPlansAvailable: true,
   paymentProcessor: "Razorpay",
-  // Answers "does paying buy an entitlement". It does now. The name is read
-  // literally by tests/legal-consistency.test.js, which fails the build if
-  // this is true while BILLING_ENFORCEMENT is on -- and, since 2026-11-01,
-  // also if it is false while enforcement is OFF, because the rewritten
-  // section 6 describes plans that actually gate something.
+  // Answers "does paying buy an entitlement". It does, as of 2026-11-10. The
+  // name is read literally by tests/legal-consistency.test.js, which fails the
+  // build if this is true while BILLING_ENFORCEMENT is on -- so if enforcement
+  // is ever switched back off, this must become true again and section 6 must
+  // be rewritten with it. The complementary check, for a document claiming
+  // enforcement while the variable is unset (the state this file spent nine
+  // days in), is billingPolicyContradictions() in
+  // lib/security/required-config.js, which reports at boot in production
+  // because no test can see a deployment's environment.
   checkoutIntegratedButSellsNothing: false,
   // NOT enforced, and the Terms must not imply otherwise. data/pricing.js
   // advertises a per-day transaction cap per plan ("5 per day", "15 per day")
   // and nothing in the application applies it: USER_TRANSACTION_LIMIT in
   // actions/transaction.js is a flat 500-row query bound, identical for every
-  // account. Feature tiers are enforced; this number is not. Section 6
-  // describes the first and is silent on the second.
+  // account. consumeDailyTransaction() counts the day's rows on every create
+  // and would refuse past the allowance, but BILLING_QUOTA_ENFORCEMENT is a
+  // separate switch and it is still off, so a breach logs QUOTA_WOULD_DENY and
+  // proceeds. Feature tiers are enforced as of 2026-11-10; this number is
+  // not. Section 6 describes the first and is silent on the second.
   perDayTransactionLimitEnforced: false,
   // ...but it does buy a subscription, and that distinction is the whole of
   // what section 6 has to get right. Verified: lib/billing/service.js opens a
@@ -94,7 +124,24 @@ export const TERMS = {
   // Verified: lib/payments/razorpay.js changes a plan only with
   // schedule_change_at "cycle_end", and nothing anywhere computes a part
   // period. The Terms therefore promise no proration rather than implying it.
+  //
+  // Still false as of 2026-11-11, when a one-step UPGRADE was built. That is
+  // worth stating because it is the obvious place for this to have become
+  // true: a plan change is the operation proration exists for. It did not,
+  // and the design is what keeps it false -- the upgrade is applied at the end
+  // of the period already paid for, so there is no part period to charge,
+  // credit or refund. A DOWNGRADE is the case that would require one, and it
+  // is for exactly this reason that none was built. If an immediate upgrade is
+  // ever wanted, this flag, section 6 and a published proration policy change
+  // together or not at all.
   prorationCalculated: false,
+  // Upwards only, from Settings and from /billing, landing at cycle end.
+  // Verified: app/api/billing/plan-change/route.js -> requestPlanChange(),
+  // which refuses a downgrade and an interval-only change with NOT_AN_UPGRADE.
+  // Section 6 must describe this as an upgrade and must not present it as
+  // immediate or as symmetrical.
+  oneStepUpgrade: true,
+  oneStepDowngrade: false,
 
   // --- Acceptance, verified ----------------------------------------------
   //

@@ -83,13 +83,26 @@ export class EntitlementError extends Error {
 // `planId` must come from a verified subscription -- see lib/billing/service.js
 // -- never from a request body, a cookie, a header or anything the browser can
 // set. An unknown plan grants nothing: rankOf returns -1 and the set is empty.
-export function requireEntitlement(planId, key) {
+//
+// `grantAll` is the development-only override in lib/billing/dev-override.js,
+// and it is the CALLER that decides it, not this file. This module is a pure
+// function of a plan id and a key -- it reads no environment and is handed no
+// user -- which is what lets it be tested without a database, and that is
+// worth more than saving a parameter at the one call site that needs it
+// (lib/billing/guard.js).
+export function requireEntitlement(planId, key, { grantAll = false } = {}) {
   if (!ENTITLEMENT_KEYS.includes(key)) {
     // A typo in a key would otherwise fail open: an unknown key is in no
     // plan's set, so every plan would be denied -- or, worse, a later
     // "default allow" would let everyone through. Loud and immediate.
     throw new Error(`Unknown entitlement key: ${key}`);
   }
+
+  // Deliberately after the check above, so a misspelled key still fails loud
+  // for the overridden account. That account is the one doing the testing, and
+  // therefore the likeliest to reach a new key first; letting it through a
+  // typo would hide the fault exactly where it would otherwise be caught.
+  if (grantAll) return;
 
   if (planGrants(planId, key)) return;
 
@@ -106,10 +119,19 @@ export function requireEntitlement(planId, key) {
 
 // For the browser: what to lock and what to offer, without the browser being
 // trusted to act on it. Everything here is advisory; the server checks again.
-export const entitlementSummary = (planId) => ({
+//
+// Under the development override the capability list is every key, while
+// `planId` keeps reporting the real plan and `devAccess` says why the two do
+// not agree. Three separate facts, none of them dressed up as another: the
+// alternative -- reporting a plan the account has not got -- is what Settings
+// would then display back as a subscription.
+export const entitlementSummary = (planId, { grantAll = false } = {}) => ({
   planId: planId ?? FREE_PLAN_ID,
-  entitlements: [...entitlementsFor(planId ?? FREE_PLAN_ID)],
+  entitlements: grantAll
+    ? [...ENTITLEMENT_KEYS]
+    : [...entitlementsFor(planId ?? FREE_PLAN_ID)],
   enforced: enforcementEnabled(),
+  ...(grantAll ? { devAccess: true } : {}),
 });
 
 // The cheapest plan that includes a feature, for an upgrade prompt.

@@ -159,18 +159,73 @@ export default function TermsPage() {
           </Section>
 
           <Section id="plans" number="6" title="Plans and payment">
-            {/* Rewritten 2026-11-01, with a version bump, when
-                BILLING_ENFORCEMENT was switched on.
+            {/* Amended 2026-11-11, with a version bump: a one-step upgrade
+                between paid plans now exists, and the paragraph below used to
+                say it did not.
+        
+                Read the note below before changing that paragraph again. The
+                sentence it replaced -- "There is no way to move from one paid
+                plan to another in a single step" -- was itself the correction
+                of an earlier sentence promising a plan change the product
+                could not make (finding S3 of the subscription audit). So this
+                paragraph has now been wrong in both directions, and the thing
+                that keeps it honest is not prose discipline but
+                tests/pricing-copy.test.js, which reads whether
+                requestPlanChange() has a caller rather than whether the copy
+                sounds right.
+        
+                Three things the new paragraph is careful about:
+                  - it says UP, not "between". Downgrades are still two steps,
+                    and the reason is given rather than left to be inferred;
+                  - it says the change lands at the END of the paid period, so
+                    nobody reads "one step" as "immediately";
+                  - it keeps the proration sentence verbatim. Nothing about
+                    part periods changed, prorationCalculated is still false,
+                    and an upgrade that lands at cycle end is precisely how
+                    that stays true.
+        
+                Rewritten 2026-11-10, with a version bump, on the day
+                BILLING_ENFORCEMENT was actually set.
 
-                The previous text said WHealthOS was free, that no paid
-                feature was held back, and that paying unlocked nothing. It
-                also promised new terms BEFORE any limit was applied. This is
-                that change, and it has to be as plain about what is now
-                withheld as the old text was about nothing being withheld.
+                The history matters here, because this is the third version of
+                this section in under three weeks and the middle one was wrong:
 
-                One thing it must NOT claim: the per-day transaction cap on
-                the pricing page is advertised and not enforced. See
-                perDayTransactionLimitEnforced in lib/legal/terms.js. */}
+                  2026-10-23  every feature open to every account, paying
+                              unlocked nothing, and the section said so.
+                  2026-11-01  announced enforcement -- "the difference between
+                              them is now applied to your account" -- on the
+                              understanding that the switch had been thrown. It
+                              had not been set anywhere, so requireEntitlement()
+                              logged ENTITLEMENT_WOULD_DENY and returned, and
+                              every paid feature stayed open to everybody. The
+                              subscription audit in docs/testing/ found it.
+                  2026-11-10  a draft that withdrew the claim and restored the
+                              2026-10-23 position. Never shipped: the operator
+                              chose to set the flag instead, which is this.
+
+                So the 2026-11-01 text returns nearly unchanged, and is true for
+                the first time. Note how it dates itself: the callout
+                interpolates TERMS.version rather than naming a date in prose,
+                so "until <version>" moves with the bump instead of being
+                retyped and left behind. The 2026-11-01 version was not wrong
+                because somebody mistyped a date -- it was wrong because the
+                document and the deployment were changed by different hands on
+                different days, which is what lib/security/required-config.js
+                now reports at boot.
+
+                Three things this section must NOT do, each asserted by
+                tests/legal-consistency.test.js:
+                  - say that paying unlocks nothing, while enforcement is on;
+                  - mention the transaction allowances the pricing page prints
+                    beside each plan as though they were applied. They are a
+                    separate switch, BILLING_QUOTA_ENFORCEMENT, and it is still
+                    off -- see perDayTransactionLimitEnforced in
+                    lib/legal/terms.js;
+                  - offer a change of plan the application does not
+                    implement. As of 2026-11-11 it implements one, upwards
+                    only, and the paragraph says so in those terms; the test
+                    asserts against the literal phrase the S3 sentence used,
+                    which this does not reuse. */}
             <Callout>
               <strong>
                 WHealthOS has a free plan and two paid plans, and the
@@ -178,16 +233,23 @@ export default function TermsPage() {
               </strong>{" "}
               Until {TERMS.version} every account received every feature
               regardless of payment. That is no longer the case, and this
-              version of these terms is the notice of it.
+              version of these terms is the notice of it. The version dated
+              2026-11-01 said the same thing nine days early: it was published
+              before the change was actually made, and every feature in fact
+              stayed open to every account until today.
             </Callout>
             <P>
               The free plan remains free, needs no card, and keeps the core of
               the product: your accounts, transactions, cards, the dashboard
-              and the financial overview. The paid plans add budgets, goals,
-              analytics, data export and the AI features. The pricing page
-              lists exactly which feature belongs to which plan, and that
-              table is the same one the application checks against &mdash; it
-              is not a separate marketing description of it.
+              and the financial overview, with no limit on how much you record.
+              Pro adds budgets, goals, analytics, data export and the
+              customisation settings. Intelligent adds the AI features, and
+              that includes reading a receipt from a photo &mdash; something
+              every account could do until today, so it is named here rather
+              than left for you to infer. The pricing page lists, feature by
+              feature, which plan includes what, and that table is the same one
+              the application checks against &mdash; it is not a separate
+              marketing description of it.
             </P>
             <P>
               Payment is taken by <Fact value={TERMS.paymentProcessor} />.
@@ -204,10 +266,29 @@ export default function TermsPage() {
               You can cancel at any time from Settings. The subscription then
               runs to the end of the period you have already paid for and does
               not renew, and the paid features remain available until it ends.
-              Changing between plans also takes effect at the end of the
-              current period, so you are never charged twice over for the same
-              month and never owed a part-period refund. We do not calculate
-              proration.
+            </P>
+            <P>
+              <strong>
+                You can move up to a higher plan in one step, from Settings.
+              </strong>{" "}
+              The change takes effect at the end of the period you have already
+              paid for, not immediately: nothing is charged on the day you ask
+              for it, the plan you are on continues until that period ends, and
+              the new plan&rsquo;s price is charged when the subscription next
+              renews &mdash; and each period after that, until you cancel. You
+              will be shown the new price and the date it starts before you
+              confirm, and the change is reported on your plan in Settings
+              until it takes effect.{" "}
+              <strong>
+                Moving down to a lower plan, or changing how often you are
+                billed, still takes two steps:
+              </strong>{" "}
+              cancel the subscription you have, keep it to the end of the period
+              you paid for, and subscribe again on the plan or period you want.
+              Nothing is charged twice over for the same period and nothing is
+              owed back part-way through one &mdash; we do not calculate
+              proration, which is also why a move down cannot be done in one
+              step.
             </P>
             <P>
               If a payment is taken and the features it buys do not become

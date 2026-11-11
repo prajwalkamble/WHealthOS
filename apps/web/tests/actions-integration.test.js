@@ -122,6 +122,38 @@ beforeAll(async () => {
       data: { ...t, name, imageUrl: "https://example.test/avatar.png" },
     });
     TENANTS[name].id = user.id;
+
+    // Entitled, because the product is. Every tenant here gets a live
+    // Intelligent subscription so that this suite keeps testing what it is
+    // named for -- storage, isolation, normalisation -- rather than the
+    // entitlement gates, which have their own coverage in
+    // tests/entitlements.test.js, tests/entitlement-coverage.test.js and the
+    // subscription cases in tests/billing-integration.test.js.
+    //
+    // Added 2026-11-10, when BILLING_ENFORCEMENT was switched on. Until then
+    // every gate logged and returned, so a fixture with no plan could use
+    // budgets, analytics and the paid appearance settings; from that day it
+    // could not, and five cases here failed for a reason that had nothing to
+    // do with what they assert.
+    //
+    // Note the route the flag took to get here: vitest.config.mjs loads only
+    // .env.test, but the Prisma client loads apps/web/.env from the working
+    // directory, so everything in it reaches the test process. Writing the
+    // subscription rows is the fix that holds whichever way that file points
+    // -- these cases now pass with enforcement on and with it off.
+    await admin.subscription.create({
+      data: {
+        userId: user.id,
+        planId: "intelligent",
+        interval: "MONTHLY",
+        providerSubscriptionId: `sub_test_${name}_${user.id.slice(0, 8)}`,
+        status: "ACTIVE",
+        amount: 69900,
+        currency: "INR",
+        currentStart: new Date("2026-01-01T00:00:00Z"),
+        currentEnd: new Date("2099-01-01T00:00:00Z"),
+      },
+    });
   }
 });
 

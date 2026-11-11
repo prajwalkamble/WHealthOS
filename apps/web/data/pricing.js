@@ -9,10 +9,16 @@
 // `monthly` values below, so editing one of them changes what somebody pays
 // -- and will disagree with the Razorpay Plan until that is updated too.
 //
-// The LIMITS are not. The daily transaction cap is not applied to anybody,
-// and the feature ticks are only enforced when BILLING_ENFORCEMENT is on,
-// which it is not. Until then every account gets every feature whatever it
-// has paid, and the checkout screen says so before taking money.
+// The LIMITS depend on configuration, and this comment deliberately no longer
+// asserts which way it is set -- it said "which it is not" while .env said
+// otherwise, which sent the 2026-11-10 audit looking in the wrong place.
+//
+// The feature ticks are enforced only when BILLING_ENFORCEMENT is "on"; the
+// daily cap only when BILLING_QUOTA_ENFORCEMENT is. With either unset, every
+// account gets that much whatever it has paid, and /pricing, /billing and the
+// Settings plan card all say so before taking money. To read the live answer
+// rather than a comment: enforcementEnabled() in lib/billing/entitlements.js
+// and quotaEnforcementEnabled() in lib/billing/quota.js.
 
 export const BILLING_PERIODS = [
   { id: "monthly", label: "Monthly" },
@@ -196,6 +202,41 @@ export const FEATURE_GROUPS = [
   {
     title: "AI & Insights",
     features: [
+      // Receipt scanning, added to this table on 2026-11-10 and Intelligent
+      // from the start of the same day.
+      //
+      // It had no row here at all until then, and no entitlement key: it has
+      // sent photos to Gemini since before plans existed, behind a session and
+      // an Arcjet token bucket and nothing else -- not granted, not denied,
+      // never considered. The pricing table was the only surface silent about
+      // it; data/landing.js advertises it, lib/legal/terms.js lists it among
+      // what the service does, and lib/legal/ai.js documents what it sends and
+      // what it gets wrong.
+      //
+      // It was published free-on-every-plan for the length of one commit,
+      // because that is what the running product did. The operator's rule is
+      // the one that decides it instead: AI functionality belongs to
+      // Intelligent, and a plan below it ends at the customisation features.
+      // Receipt scanning reaches a model, so it is in this group and it is
+      // Intelligent-only, like every other row here.
+      //
+      // That takes a working feature away from accounts that have it, which is
+      // the thing section 6 of the Terms promises notice of first. The notice
+      // is the version dated 2026-11-10, which is also the day enforcement was
+      // switched on -- so it goes with the rest rather than arriving as a
+      // separate surprise later.
+      //
+      // Unlike the other six, this one has its own surface and therefore its
+      // own gate: actions/transaction.js, before the image is read and before
+      // the model is called. tests/entitlement-coverage.test.js asserts the
+      // gate is in that file and that no model call site is left without one.
+      {
+        icon: "ScanLine",
+        key: "ai.receipts",
+        label: "Receipt scanning",
+        hint: "Photograph a receipt and have the amount, date, merchant and category read into a draft you confirm.",
+        plans: ["intelligent"],
+      },
       {
         icon: "Sparkles",
         key: "ai.insights",
@@ -304,31 +345,62 @@ export const FREE_FAQS = [
   },
 ];
 
+// Rewritten 2026-11-10, twice. First because three of these answers described
+// a per-day cap that nothing applies and a fourth promised an upgrade that
+// "applies immediately" through a plan switch that does not exist -- S5 and S3
+// in the subscription audit (docs/testing/). Then again, later the same day,
+// when BILLING_ENFORCEMENT was switched on and the two answers that said
+// nothing was withheld from the free plan stopped being true.
+//
+// The rule survives both edits and is the thing to keep: an answer to a direct
+// question is a statement about what happens, so it may not assert a mechanism
+// that does not run -- and may not deny one that does. The comparison table
+// above is allowed to describe what the plans are INTENDED to separate; an
+// answer is not.
+//
+// Both halves are live at once right now, which is why these answers read the
+// way they do. Feature tiers ARE enforced: a free account no longer has
+// budgets, goals, analytics, export, customisation or the AI features. The
+// transactions-per-day figures are NOT applied -- that is
+// BILLING_QUOTA_ENFORCEMENT, a separate switch, still off -- so an answer that
+// describes reaching a daily limit would be describing nothing.
+//
+// tests/pricing-copy.test.js holds these to it, with each assertion tied to
+// the mechanism rather than to the wording.
 export const PLAN_FAQS = [
   {
     question: "Can I use WHealthOS for free?",
     answer:
-      "Yes. The Free plan covers the dashboard, accounts, and up to five transactions a day, with no card required. You can also try everything without an account at all from the demo.",
+      "Yes. The free plan needs no card at any point and keeps the core of the product: your accounts, transactions, cards, the dashboard and the financial overview, with no limit on how much you record. Budgets, goals, analytics, data export and the customisation settings are on Pro. Everything that uses AI — including reading a receipt from a photo — is on Intelligent. You can also try the whole application, paid features included, without an account at all from the demo.",
   },
   {
     question: "Does WHealthOS charge per transaction?",
     answer:
-      "No. Plans are a flat monthly price. The only per-transaction figure is the daily cap on how many you can add, which differs by plan.",
+      "No. A plan is a flat monthly or yearly price, and nothing is charged per transaction, per account or per export.",
   },
   {
-    question: "What happens when I reach my daily transaction limit?",
+    question: "What are the transactions-per-day figures in the table?",
     answer:
-      "Nothing already recorded is affected — you simply cannot add more until the next day, or until you move to a plan with a higher cap.",
+      "What each plan is meant to allow if those limits are ever applied. They are not applied to anyone today — every account can add as many transactions as it needs. If that changes, it will be said in advance and in a new version of the Terms, which already commit us to telling you first.",
   },
   {
     question: "What features are included in the Intelligent plan?",
     answer:
-      "Everything in Pro, along with the AI work: monthly insights, spending analysis, written summaries, natural-language queries, budget suggestions and recommendations.",
+      "Everything in Pro, and all of the AI work: monthly insights, spending analysis, written summaries, natural-language queries, budget suggestions, recommendations, and reading a receipt from a photo. Anything that sends your figures or an image to a model is on this plan and no other — Pro stops at the customisation settings.",
   },
   {
-    question: "Can I upgrade or downgrade later?",
+    question: "Can I move between the paid plans later?",
+    // Upwards, yes, in one step. Downwards, still not -- and the answer says
+    // which is which rather than "you can change plans", because the two go
+    // through completely different routes and take different amounts of time.
+    //
+    // Note what it does not promise: that the upgrade is immediate. It lands
+    // at the end of the period already paid for, which for a yearly
+    // subscriber can be months away, and an answer that said "you can upgrade
+    // any time" would be read as "and have it today". The previous version of
+    // this answer was written to replace exactly that kind of sentence.
     answer:
-      "Yes, at any time. An upgrade applies immediately; a downgrade takes effect at the end of the period you have already paid for.",
+      "You can move up to a higher plan in one step, from Settings. It takes effect at the end of the period you have already paid for: nothing is charged on the day you ask, you keep the plan you are on until then, and the new price is charged when the subscription next renews. Moving down to a lower plan, or changing between monthly and yearly, still takes two steps — cancel the subscription you have, keep it to the end of the paid period, then subscribe again on what you want. That asymmetry is deliberate: we do not calculate part-period refunds, so a move down cannot be done without one.",
   },
   {
     question: "Is AI financial advice?",
@@ -342,6 +414,6 @@ export const PLAN_FAQS = [
   {
     question: "Can I cancel my subscription?",
     answer:
-      "Yes, whenever you like. You keep the paid features until the end of the current period, then move to the Free plan — your data stays where it is.",
+      "Yes, whenever you like, from Settings. It runs to the end of the period you have already paid for — the paid features stay available until then and stop when it ends — and your data stays exactly where it is either way. Nothing you created on a paid plan is deleted; a budget or a goal you can no longer open is still there if you subscribe again.",
   },
 ];

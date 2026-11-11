@@ -217,19 +217,81 @@ describe("The documents do not contradict each other", () => {
     }
   });
 
-  it("describes the plans it actually enforces", () => {
-    // The mirror of the guard this replaced. Until 2026-11-01 the danger was
-    // a checkout that took money for an entitlement nobody built, and section
-    // 6 had to warn about it. Enforcement is on now, so the danger has
-    // inverted: the document must describe plans that genuinely gate
-    // features, and must not go on promising that nothing is withheld.
+  it("describes the plans it actually has", () => {
+    // This guard has now been written in both directions twice, and the
+    // history is the point.
+    //
+    // Until 2026-11-01 the danger was a checkout taking money for an
+    // entitlement nobody built, so section 6 had to warn about it. On
+    // 2026-11-01 enforcement was believed to be on, the danger was taken to
+    // have inverted, and this test was rewritten to demand a document that
+    // described plans genuinely gating features.
+    //
+    // It was not on. BILLING_ENFORCEMENT was never set, requireEntitlement()
+    // logged and returned, and for nine days the Terms asserted a product that
+    // did not exist. The subscription audit found it on 2026-11-10, and this
+    // test was reversed to demand the opposite document -- then reversed back
+    // the same day, when the operator resolved it by setting the variable
+    // instead of retracting the claim. The 2026-11-01 text is the one that
+    // shipped, and it is now true.
+    //
+    // What that teaches, and the reason this comment is long: a test asserting
+    // the CONTENTS of a legal document cannot tell whether the document is
+    // true. It can only check the document against another file in the same
+    // commit, and on 2026-11-01 both were wrong together -- this test passed
+    // every day of those nine. The check that compares the document against a
+    // deployment's actual environment is billingPolicyContradictions() in
+    // lib/security/required-config.js, and it has to run at boot rather than
+    // here, because that environment is not visible from a test run.
     expect(TERMS.checkoutIntegratedButSellsNothing).toBe(false);
     expect(TERMS.paidPlansAvailable).toBe(true);
+    // Unchanged throughout, and the reason the renewal and cancellation terms
+    // below are owed whatever else is true: the subscription itself is real.
     expect(TERMS.subscriptionsAreReal).toBe(true);
 
-    // The old promises must be gone, not merely contradicted elsewhere.
-    expect(rendered.terms).not.toMatch(/does not do is unlock anything/i);
-    expect(rendered.terms).not.toMatch(/no paid feature is held back/i);
+    // The document must say plainly that the plans now gate features.
+    // Asserted as presence rather than absence, because the failure being
+    // guarded against is a page that goes quiet about it -- which is how
+    // somebody loses Budgets on a Tuesday with no notice on the record.
+    expect(
+      rendered.terms,
+      "section 6 must say that the plan difference is applied to the account"
+    ).toMatch(/difference between them is now applied/i);
+
+    // And it must name what moved, rather than gesturing at "paid features":
+    // these five are what a free account no longer has.
+    for (const feature of ["budgets", "goals", "analytics", "data export", "AI features"]) {
+      expect(
+        rendered.terms,
+        `section 6 must name ${feature} as belonging to a paid plan`
+      ).toMatch(new RegExp(feature, "i"));
+    }
+
+    // The withdrawn sentences from the draft that went the other way, exactly,
+    // so that restoring either without the flag cannot pass.
+    expect(
+      rendered.terms,
+      "section 6 says paying unlocks nothing while enforcement is on"
+    ).not.toMatch(/does not unlock anything/i);
+    expect(
+      rendered.terms,
+      "section 6 claims every feature is included in every account"
+    ).not.toMatch(/included in every account/i);
+
+    // The correction has to be visible in the document, not just in a git
+    // log. Two things are being owned here: that the 2026-11-01 version
+    // announced this change nine days before it was made, and that this is
+    // the version whose date matches it.
+    expect(
+      rendered.terms,
+      "section 6 must own that 2026-11-01 announced this early"
+    ).toMatch(/2026-11-01/);
+    // Dated by interpolation, not by prose. A retyped date is how the
+    // 2026-11-01 version came to carry its own.
+    expect(
+      read(PAGES.terms),
+      "the callout must date itself from TERMS.version"
+    ).toContain("{TERMS.version}");
 
     // A recurring charge still has to state that it recurs and how to stop
     // it -- that requirement never depended on enforcement.
@@ -244,6 +306,14 @@ describe("The documents do not contradict each other", () => {
     // And it must still promise a refund where a payment buys nothing, which
     // is now the narrower case of a payment that fails to deliver.
     expect(rendered.terms).toMatch(/refund it in full/i);
+
+    // Not a plan change: there is no route, action or control for one, which
+    // is finding S3 in the audit. The old sentence said changing plans "takes
+    // effect at the end of the current period", which reads as an offer.
+    expect(
+      rendered.terms,
+      "section 6 must not offer a plan change the application does not have"
+    ).not.toMatch(/changing between plans/i);
 
     // The notice period for taking a feature away from the free plan. The
     // previous version promised exactly this before any limit was applied,

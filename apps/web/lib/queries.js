@@ -475,8 +475,25 @@ async function budgetsFor(tx, userId, { year, month } = {}) {
   };
 }
 
+// Finding S4 in the subscription audit, fixed on the day enforcement was
+// switched on: this read and getGoals() below had no gate, so a free account
+// could not create or edit a budget -- actions/budget.js has refused that
+// since the gates were written -- but could still open /budgets and read
+// every one it had made while the feature was open to everybody.
+//
+// Harmless while nothing was enforced, and exactly the kind of thing that
+// surfaces on the first day it is, which is the worst day to find it. The gate
+// goes here rather than in the page for the same reason getAnalytics puts it
+// here: a page is one caller, and the authority belongs next to the rows.
+//
+// Reads are gated, not stripped. Nothing deletes a budget an account can no
+// longer open, and resubscribing brings it back -- which is what the pricing
+// FAQ promises.
 export async function getBudgets(period) {
-  return withCurrentTenant((tx, userId) => budgetsFor(tx, userId, period));
+  return withCurrentTenant(async (tx, userId) => {
+    await requireFeatureInAction(userId, "budgets", { tx });
+    return budgetsFor(tx, userId, period);
+  });
 }
 
 // Goals with progress, derived from their contributions.
@@ -528,7 +545,10 @@ async function goalsFor(tx, userId) {
 }
 
 export async function getGoals() {
-  return withCurrentTenant(goalsFor);
+  return withCurrentTenant(async (tx, userId) => {
+    await requireFeatureInAction(userId, "goals", { tx });
+    return goalsFor(tx, userId);
+  });
 }
 
 // A goal's own contribution history, newest first.

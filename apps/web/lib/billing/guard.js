@@ -10,13 +10,25 @@
 // id and can be tested without a database.
 
 import { ActionError } from "@/lib/action-error";
+import { devGrantsAll } from "./dev-override";
 import { EntitlementError, requireEntitlement, smallestPlanWith } from "./entitlements";
 import { effectivePlanId } from "./service";
 
 // For route handlers: throws EntitlementError, which carries a 403.
+//
+// This is where the development override is applied, and applying it in one
+// place is the point: all 20 gated server operations -- the goal, budget,
+// preference and receipt actions, the three reads in lib/queries.js, the
+// export route and the AI chat route -- come through here or through
+// requireFeatureInAction below, so there is one function to read when asking
+// what the override can reach, and no second path for it to be forgotten on.
+//
+// The plan returned is always the REAL plan. The override skips the check; it
+// does not rewrite who the account is. Callers that report a plan to somebody
+// therefore go on reporting the true one.
 export async function requireFeature(userId, key, { tx = null } = {}) {
   const planId = await effectivePlanId(userId, { tx });
-  requireEntitlement(planId, key);
+  requireEntitlement(planId, key, { grantAll: devGrantsAll(userId) });
   return planId;
 }
 

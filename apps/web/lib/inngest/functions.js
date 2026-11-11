@@ -515,9 +515,11 @@ export const sendMonthlyReport = inngest.createFunction(
       //
       // Not entitled is a skip, not a failure: the report still goes out with
       // the totals and the category breakdown, which is the path a model
-      // outage already takes. While BILLING_ENFORCEMENT is off,
-      // requireEntitlement logs and returns, so nothing changes until the
-      // operator turns enforcement on.
+      // outage already takes. Live since 2026-11-10, when BILLING_ENFORCEMENT
+      // was switched on -- before that requireEntitlement logged
+      // ENTITLEMENT_WOULD_DENY and returned, so every account with the switch
+      // on in Settings was emailed AI commentary each month and we paid the
+      // model for it.
       try {
         requireEntitlement(await effectivePlanId(userId), "ai.insights");
       } catch (error) {
