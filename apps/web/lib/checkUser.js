@@ -17,7 +17,23 @@ const PROFILE_REFRESH_MS = 24 * 60 * 60 * 1000;
 // The app shell shows the person's own rating in the feedback widget. Pulled
 // in with the row that is being fetched anyway, rather than as a second query
 // per navigation: it is one join, not another round trip.
-const WITH_RATING = { rating: { select: { score: true } } };
+// ...and, since 2026-11-10, the plan. The shell decides whether to mount the
+// assistant at all, which needs the effective plan on every navigation. It
+// rides along on the fetch that was already happening rather than opening two
+// more tenant transactions per page: the columns are exactly the ones
+// grantsAccess() reads, and lib/billing/service.js owns the decision made
+// from them (planIdFromRows).
+//
+// Bounded by the same window as the billing service's own query, so the shell
+// and the Settings plan card cannot look at different sets of rows.
+const WITH_RATING = {
+  rating: { select: { score: true } },
+  subscriptions: {
+    select: { planId: true, status: true, currentEnd: true },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  },
+};
 
 // Reading the Clerk session and resolving it to a WHealthOS row is split from
 // creating one, because creating one is no longer something a page may do on

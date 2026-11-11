@@ -10,6 +10,7 @@ import { ImportButton } from "@/components/import-drawer";
 import { AI_USAGE_LINK } from "@/lib/legal/ai";
 import { publicAvailability, plansAreOnSale } from "@/lib/billing/availability";
 import { billingSummary } from "@/lib/billing/service";
+import { devGrantsAll } from "@/lib/billing/dev-override";
 import { enforcementEnabled } from "@/lib/billing/entitlements";
 import { getCurrentUserId } from "@/lib/prisma";
 import { getMonthlyInsightsEnabled, getUserAccounts } from "@/lib/queries";
@@ -31,11 +32,17 @@ export default async function SettingsPage({ searchParams }) {
   // surfaces cannot disagree about whether this deployment sells anything.
   const availability = publicAvailability();
 
-  const [user, accounts, monthlyInsights, billing] = await Promise.all([
+  // The internal id is carried out of this chain rather than resolved a
+  // second time: getCurrentUserId() opens a tenant transaction, so asking
+  // twice costs one for nothing.
+  const [user, accounts, monthlyInsights, { userId, billing }] = await Promise.all([
     currentUser(),
     getUserAccounts(),
     getMonthlyInsightsEnabled(),
-    getCurrentUserId().then((id) => billingSummary(id)),
+    getCurrentUserId().then(async (id) => ({
+      userId: id,
+      billing: await billingSummary(id),
+    })),
   ]);
   const email = user?.primaryEmailAddress?.emailAddress ?? null;
   const name =
@@ -84,6 +91,7 @@ export default async function SettingsPage({ searchParams }) {
         <PlanCard
           summary={billing}
           enforced={enforcementEnabled()}
+          devAccess={devGrantsAll(userId)}
           onSale={plansAreOnSale()}
           availability={availability}
           initialPlanId={typeof params.plan === "string" ? params.plan : null}

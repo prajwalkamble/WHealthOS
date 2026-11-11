@@ -1,9 +1,10 @@
-<!-- STATUS: PARTIAL. One script. -->
+<!-- STATUS: PARTIAL. Four scripts. -->
 
 # scripts / development
 
-> **Status: PARTIAL.** Local development helpers. One script so far;
-> everything else here is still planned.
+> **Status: PARTIAL.** Local development helpers. Four scripts so far;
+> everything else here is still planned. `fetch-rates.mjs` and
+> `inngest-sync.mjs` carry their usage in their own header comments.
 
 ## razorpay-plans.mjs
 
@@ -51,3 +52,64 @@ reverse.
 
 The mode comes from the key prefix: `rzp_test_` creates test plans and
 charges nothing, `rzp_live_` creates live ones.
+
+## seed-dev-account.mjs
+
+Fills the development account -- the one the feature override designates --
+with six months of plausible financial history.
+
+The override grants every entitlement to one account, and that account was
+created to test with, so it starts with nothing in it. Budgets, Goals,
+Analytics and the AI surfaces then render unlocked and completely empty,
+which is indistinguishable from a feature that does not work. This gives them
+something to render: two accounts, ~195 transactions across six months and
+fourteen categories, an overall budget plus six per-category ones, five goals
+in three states with their contributions, and four cards.
+
+```sh
+# See the plan. Writes nothing, and rolls its transaction back.
+node --env-file=apps/web/.env scripts/development/seed-dev-account.mjs --dry-run
+
+# Write it.
+node --env-file=apps/web/.env scripts/development/seed-dev-account.mjs
+
+# Replace what a previous run wrote.
+node --env-file=apps/web/.env scripts/development/seed-dev-account.mjs --replace
+```
+
+Deterministic: a fixed generator seed, so the figures are the same on every
+run and a number you noted yesterday still means something today.
+
+**It cannot be pointed at another account.** There is no account argument. The
+target is `DEV_FEATURE_OVERRIDE_USER_ID`, it refuses to start unless
+`devOverrideEnabled()` agrees -- the same four conditions that gate the
+override itself, including *not on Vercel* -- and it then checks that the id
+and `DEV_FEATURE_OVERRIDE_EMAIL` name the same row before writing anything.
+It connects through `DATABASE_URL`, the role that row-level security applies
+to, with `app.tenant_id` set to that one id; every isolation policy carries an
+explicit `WITH CHECK`, so the database itself rejects a row belonging to
+anyone else.
+
+It writes to `accounts`, `transactions`, `budgets`, `goals`,
+`goal_contributions` and `cards`, and sets `displayCurrency` (a display
+preference that rewrites no amount). It does not go near subscriptions,
+payments, checkout attempts, billing events or legal consents. Without
+`--replace` it refuses an account that already has data rather than doubling
+it.
+
+Two deliberate choices worth knowing about, both explained at more length in
+the script:
+
+- **One currency.** `lib/currency/presentation.js` is explicit that a single
+  conversion scalar is valid only while the ledger holds one currency, and
+  that the two-currency case cannot arise because no account can be given a
+  currency through the UI -- so `presentationFor()` detects it and refuses,
+  formatting every figure in whichever currency the query returns first. A
+  hand-written USD account reaches that branch and an unconverted mixed total
+  gets a `$` in front of it. So the seed stays in INR.
+- **Only the latest instance of each fixed monthly cost is flagged
+  recurring**, always with `nextRecurringDate` in the future. The
+  `process-recurring-transactions` job picks up recurring rows whose next date
+  has passed -- or whose next date and `lastProcessed` are both null -- so
+  flagging every historical copy would have it quietly manufacture duplicates
+  the first time it ran.

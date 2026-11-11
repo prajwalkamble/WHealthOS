@@ -1,4 +1,5 @@
 import { refreshConfirming } from "@/lib/billing/service";
+import { devGrantsAll } from "@/lib/billing/dev-override";
 import { entitlementSummary } from "@/lib/billing/entitlements";
 import { authenticate, fail, ok } from "@/lib/billing/http";
 
@@ -25,7 +26,9 @@ export async function GET() {
     // localhost -- would poll an unchanging row and then give up.
     const summary = await refreshConfirming(auth.userId);
     return ok({
-      ...entitlementSummary(summary.planId),
+      // planId stays the account's real plan; only the capability list widens.
+      // See entitlementSummary for why those are reported as separate facts.
+      ...entitlementSummary(summary.planId, { grantAll: devGrantsAll(auth.userId) }),
       subscription: summary.subscription,
       pending: summary.pending,
       // Whether something is still on its way. The confirmation page stops

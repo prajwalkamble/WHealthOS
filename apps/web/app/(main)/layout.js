@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { checkUser } from "@/lib/checkUser";
 import FeedbackWidget from "@/components/feedback-widget";
 import AgentWidget from "@/components/whos-agent/agent-widget";
+import { planIdFromRows } from "@/lib/billing/service";
+import { devGrantsAll } from "@/lib/billing/dev-override";
+import { enforcementEnabled, planGrants } from "@/lib/billing/entitlements";
 import PreferencesSync from "@/components/preferences-sync";
 import { CurrencyProvider } from "@/components/currency-provider";
 import { currentCurrency } from "@/lib/currency/server";
@@ -80,7 +83,12 @@ const MainLayout = async ({ children }) => {
       <AppSidebar />
 
       <SidebarInset>
-        <AppHeader />
+        {/* devAccess is DECIDED here and only displayed there. AppHeader is a
+            client component and the override's variables are not NEXT_PUBLIC_,
+            so the browser cannot read them -- and nothing is lost by telling
+            it the answer, because the answer is not the authorisation. Someone
+            flipping this boolean in devtools gets a badge and no features. */}
+        <AppHeader devAccess={devGrantsAll(user?.id)} />
 
 
         {/* app-content: the Content Layout setting centres this column. */}
@@ -102,8 +110,34 @@ const MainLayout = async ({ children }) => {
           that widget's own comment reserved for it. Mounted here rather than
           per page so a question can be asked while looking at the figures it
           is about. It holds no server data: everything it shows is fetched by
-          its own authenticated request when a question is asked. */}
-      <AgentWidget />
+          its own authenticated request when a question is asked.
+
+          Not mounted at all without the plan for it, from 2026-11-10. The
+          authorisation has not moved -- /api/ai/chat calls
+          requireFeature(userId, "ai.queries") before a model is reached, and
+          that is still the only thing standing between an account and an
+          answer. This decides whether a control is offered, which is a
+          different question from whether a request is allowed, and it was
+          previously answered "always": every account saw the assistant, and
+          from the day enforcement went on, the ones without Intelligent would
+          have been invited to ask a question and then refused.
+
+          The plan comes from the rows checkUser() already fetched, so this
+          costs no query. planGrants rather than entitlementSummary: no part of
+          this decision is sent to the browser, and the children of a false
+          branch are never rendered, so there is no markup to strip.
+
+          enforcementEnabled() is part of the condition for the same reason
+          components/billing/feature-gate.jsx puts it in its own: while
+          enforcement is off the route lets every account through, and hiding
+          a control that would in fact work is as much a lie as a padlock on
+          one that is not locked. The two have to agree about when a refusal
+          actually happens. */}
+      {(!enforcementEnabled() ||
+        devGrantsAll(user?.id) ||
+        planGrants(planIdFromRows(user?.subscriptions), "ai.queries")) && (
+        <AgentWidget />
+      )}
     </SidebarProvider>
     </CurrencyProvider>
     </Clerk>
