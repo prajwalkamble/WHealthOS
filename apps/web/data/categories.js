@@ -159,6 +159,38 @@ export const defaultCategories = [
     color: "#94a3b8", // slate-400
     icon: "MoreHorizontal",
   },
+
+  // Internal transfers.
+  //
+  // Transaction.category is NOT NULL, so the two legs of a transfer need one,
+  // and these are it. They are in this catalogue rather than being bare
+  // strings so that everything which looks a category up by id -- the colour
+  // map below, the account table, global search, the exports -- finds a name
+  // and a colour instead of rendering a raw id nobody chose.
+  //
+  // Their `type` is what keeps them out of the pickers. app/lib/schema.js
+  // builds category id -> allowed types from this table and refuses a mismatch,
+  // so "transfer-out" cannot be used on an ordinary EXPENSE; and every expense
+  // picker in the application filters on type === "EXPENSE", so neither of
+  // these appears as something to choose. A transfer's category is set by the
+  // transfer service and is never submitted by a browser.
+  //
+  // One colour for both, and a deliberately neutral one: a transfer is not a
+  // gain to be green or a loss to be red.
+  {
+    id: "transfer-out",
+    name: "Transfer Out",
+    type: "TRANSFER_OUT",
+    color: "#64748b", // slate-500
+    icon: "ArrowUpRight",
+  },
+  {
+    id: "transfer-in",
+    name: "Transfer In",
+    type: "TRANSFER_IN",
+    color: "#64748b", // slate-500
+    icon: "ArrowDownLeft",
+  },
 ];
 
 export const categoryColors = defaultCategories.reduce((acc, category) => {

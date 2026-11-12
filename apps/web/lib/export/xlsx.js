@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { escapeFormula } from "./csv";
 import { periodTotals } from "../analytics";
+import { balanceEffect } from "../money";
 import { BRAND_NAME, EMAIL_LOGO, INK } from "../brand/identity.mjs";
 import { LOCKUP_PNG_BASE64 } from "../brand/raster.generated.mjs";
 
@@ -81,9 +82,14 @@ function addTransactionsSheet(workbook, rows) {
       escapeFormula(row.type ?? ""),
       escapeFormula(row.category ?? ""),
       escapeFormula(row.accountName ?? ""),
-      // A number, so the column sums. Expenses are written negative so a
-      // recipient's own total matches the net the application reports.
-      row.type === "EXPENSE" ? -Number(row.amount) : Number(row.amount),
+      // A number, so the column sums. Signed by balanceEffect -- the same
+      // function that moved the account balance -- so a recipient's own total
+      // matches the net the application reports, and so the two legs of an
+      // internal transfer come out as −x and +x and cancel in the sum. The
+      // old `EXPENSE ? -amount : +amount` wrote a TRANSFER_OUT as POSITIVE, so
+      // a spreadsheet of a month containing one transfer summed to twice the
+      // transfer more than the truth.
+      balanceEffect(row.type, row.amount),
       "INR",
       escapeFormula(row.status ?? ""),
       row.isRecurring ? "Yes" : "No",

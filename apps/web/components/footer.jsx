@@ -57,6 +57,7 @@ const PRODUCT_LINKS = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Transactions", href: "/transactions" },
   { label: "Accounts", href: "/accounts" },
+  { label: "Fund Transfer", href: "/transfer" },
   // "Cards", not "Cards & Wallet": the section is cards, and there is no
   // wallet.
   { label: "Cards", href: "/cards" },

@@ -13,6 +13,7 @@ import {
 } from "@/components/dashboard/widget";
 import { defaultCategories } from "@/data/categories";
 import { cn } from "@/lib/utils";
+import { amountClass, amountSign, typeLabel } from "@/lib/money";
 import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
@@ -66,7 +67,6 @@ const RecentTransactions = ({
             </thead>
             <tbody className="divide-y">
               {rows.map((transaction) => {
-                const income = transaction.type === "INCOME";
                 const label =
                   transaction.description ||
                   LABELS[transaction.category] ||
@@ -99,18 +99,16 @@ const RecentTransactions = ({
                     </td>
                     <td className="hidden px-5 py-3 sm:table-cell">
                       <span className="rounded-md border px-2 py-0.5 text-xs">
-                        {income ? "Income" : "Expense"}
+                        {typeLabel(transaction.type)}
                       </span>
                     </td>
                     <td
                       className={cn(
                         "whitespace-nowrap px-5 py-3 text-right font-semibold tabular-nums",
-                        income
-                          ? "text-positive"
-                          : "text-negative"
+                        amountClass(transaction.type)
                       )}
                     >
-                      {income ? "+" : "-"}
+                      {amountSign(transaction.type)}
                       {formatCurrency(transaction.amount)}
                     </td>
                   </tr>

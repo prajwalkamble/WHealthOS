@@ -22,6 +22,7 @@ import {
 } from "@/lib/notifications/subscription-activated";
 import { uptimeSlot } from "@/lib/stats";
 import { nextOccurrenceAfter } from "@/lib/recurring";
+import { isExpenseType, isTransferType } from "@/lib/money";
 import {
   APP_TIME_ZONE,
   monthBounds,
@@ -631,6 +632,13 @@ const getMonthlyStats = async (userId, year, month) => {
     tx.transaction.findMany({
       where: {
         userId,
+        // Ordinary transactions only. The monthly email reports a transaction
+        // count alongside the totals, and counting both legs of every transfer
+        // would inflate it -- so the legs are left out here rather than only
+        // being skipped in the reducer below, which keeps the count honest as
+        // well as the money. The reducer still skips them, as the backstop for
+        // any caller that passes rows from somewhere else.
+        transferId: null,
         date: {
           gte: startDate,
           lte: endDate,
@@ -641,8 +649,18 @@ const getMonthlyStats = async (userId, year, month) => {
 
   return transactions.reduce(
     (stats, t) => {
+      // Internal transfers are not part of a month's income or spending, and
+      // this is the figure a person is emailed -- and, if they have AI
+      // commentary on, the figure a model is asked to comment on. The old
+      // binary split sent a TRANSFER_IN through as income, so a month in which
+      // somebody moved ₹50,000 into savings was reported to them as ₹50,000
+      // earned.
+      //
+      // transactionCount below deliberately counts the rows it was given,
+      // which is why the legs are excluded by the query rather than here.
+      if (isTransferType(t.type)) return stats;
       const amount = t.amount.toNumber();
-      if (t.type === "EXPENSE") {
+      if (isExpenseType(t.type)) {
         stats.totalExpenses += amount;
         stats.byCategory[t.category] =
           (stats.byCategory[t.category] || 0) + amount;

@@ -118,9 +118,26 @@ export async function consumeDailyTransaction(tx, userId, planId, { now = new Da
   // module's locks in their own namespace.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(${LOCK_NAMESPACE}::int, hashtext(${userId})::int)`;
 
-  const used = await tx.transaction.count({
-    where: { userId, createdAt: { gte: from, lte: to } },
-  });
+  // One user action, one unit -- which is why this is two counts and not one.
+  //
+  // An internal transfer writes TWO transaction rows, the debit and the credit
+  // legs of a single act. Counting transaction rows alone would charge it
+  // double, so the advertised "5 per day" would silently become two and a half
+  // for anybody who moves money between their own accounts. Transfer legs are
+  // therefore excluded here (`transferId: null`) and each transfer is counted
+  // once in their place.
+  //
+  // Still "how many exist today" rather than a tally, so deleting a transfer
+  // frees its slot exactly as deleting a transaction does.
+  const [transactions, transfers] = await Promise.all([
+    tx.transaction.count({
+      where: { userId, transferId: null, createdAt: { gte: from, lte: to } },
+    }),
+    tx.transfer.count({
+      where: { userId, createdAt: { gte: from, lte: to } },
+    }),
+  ]);
+  const used = transactions + transfers;
 
   const within = used < limit;
   const result = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { bulkDeleteTransactions } from '@/actions/accounts';
+import { deleteInternalTransfer } from '@/actions/transfers';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { categoryColors } from '@/data/categories';
 import { useCurrency } from '@/components/currency-provider';
 import { cn } from '@/lib/utils';
+import { amountClass, amountSign, isTransferType } from '@/lib/money';
 import useFetch from '@/hooks/use-fetch';
 import { format } from 'date-fns';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, MoreHorizontal, RefreshCw, Search, Trash2, X } from 'lucide-react';
@@ -122,27 +124,48 @@ const EmptyState = ({ filtered, onClear }) => (
 
 // Edit and delete for one row. Shared so the table and the small-screen list
 // cannot drift apart.
-const RowActions = ({ onEdit, onDelete }) => (
+// `transfer` true means this row is one leg of an internal transfer, which
+// changes both actions.
+//
+// Edit is not offered at all rather than offered and refused. A transfer is
+// immutable: editing one side would move one balance and leave the other, and
+// the transfer record would still claim the old amount. getTransaction()
+// refuses to load a leg for exactly this reason, so the menu item would have
+// led to a 404.
+//
+// Delete stays, but it deletes the TRANSFER -- both legs, both balances
+// reversed, in one transaction -- and says so, because "Delete" on a row the
+// person is looking at should not quietly remove a second row somewhere else
+// without having told them.
+const RowActions = ({ onEdit, onDelete, transfer = false }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button
         variant="ghost"
         className="h-8 w-8 shrink-0 p-0"
-        aria-label="Transaction actions"
+        aria-label={transfer ? "Transfer actions" : "Transaction actions"}
       >
         <MoreHorizontal className="h-4 w-4" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
-      <DropdownMenuItem className="cursor-pointer" onClick={onEdit}>
-        Edit
-      </DropdownMenuItem>
-      <DropdownMenuSeparator />
+      {transfer ? (
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+          Part of a transfer
+        </DropdownMenuLabel>
+      ) : (
+        <>
+          <DropdownMenuItem className="cursor-pointer" onClick={onEdit}>
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </>
+      )}
       <DropdownMenuItem
         className="cursor-pointer text-destructive"
         onClick={onDelete}
       >
-        Delete
+        {transfer ? "Delete both sides" : "Delete"}
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>
@@ -224,6 +247,16 @@ export function TransactionTable ({ transactions, showAccount = false }) {
     data: deleted,
   } = useFetch(bulkDeleteTransactions);
 
+  // A separate action, because deleting a transfer is a different operation
+  // from deleting transactions: it removes both legs and reverses both
+  // balances, and bulkDeleteTransactions deliberately refuses a selection
+  // containing one rather than doing half the job.
+  const {
+    loading: transferDeleteLoading,
+    fn: deleteTransferFn,
+    data: transferDeleted,
+  } = useFetch(deleteInternalTransfer);
+
   // Memoize filter and sort transactions
   const filteredAndSortedTransactions = useMemo(() => {
     let result = [...transactions];
@@ -246,7 +279,14 @@ export function TransactionTable ({ transactions, showAccount = false }) {
 
     // Type filter
     if (typeFilter) {
-      result = result.filter((transaction) => transaction.type === typeFilter);
+      // "TRANSFER" is one option standing for two types, so it cannot be an
+      // equality test. Written as a lookup rather than `startsWith("TRANSFER")`
+      // because a prefix match is a rule nobody declared and the next type
+      // named TRANSFER-something would join this filter by accident.
+      result =
+        typeFilter === "TRANSFER"
+          ? result.filter((transaction) => isTransferType(transaction.type))
+          : result.filter((transaction) => transaction.type === typeFilter);
     }
 
     // Apply sorting
@@ -297,7 +337,18 @@ export function TransactionTable ({ transactions, showAccount = false }) {
     }));
   };
 
+  // Rows that bulk delete can actually act on. A transfer leg is not one:
+  // the action refuses any selection containing one, so letting it be selected
+  // would mean the whole delete failing because of a row the person probably
+  // did not mean to include. Excluded from "select all" and from the
+  // individual checkboxes, which are disabled.
+  const selectableOnPage = useMemo(
+    () => paginatedTransactions.filter((t) => !t.transferId),
+    [paginatedTransactions]
+  );
+
   const handleSelect = (id) => {
+    if (paginatedTransactions.find((t) => t.id === id)?.transferId) return;
     setSelectedIDs(current =>
       current.includes(id)
         ? current.filter(item => item != id)
@@ -307,10 +358,22 @@ export function TransactionTable ({ transactions, showAccount = false }) {
 
   const handleSelectAll = () => {
     setSelectedIDs(current =>
-      current.length === paginatedTransactions.length
+      current.length === selectableOnPage.length
         ? []
-        : paginatedTransactions.map((t) => t.id)
+        : selectableOnPage.map((t) => t.id)
     );
+  };
+
+  const deleteTransfer = async (transferId) => {
+    if (
+      !window.confirm(
+        "Delete this transfer? Both sides of it are removed and both account " +
+          "balances go back to what they were."
+      )
+    ) {
+      return;
+    }
+    await deleteTransferFn(transferId);
   };
 
   const deleteTransactions = async (ids) => {
@@ -341,6 +404,12 @@ export function TransactionTable ({ transactions, showAccount = false }) {
       );
     }
   }, [deleted, deleteLoading]);
+
+  useEffect(() => {
+    if (transferDeleted?.success && !transferDeleteLoading) {
+      toast.success("Transfer deleted. Both balances have been restored.");
+    }
+  }, [transferDeleted, transferDeleteLoading]);
 
   // Deleting or filtering can shrink the result set past the current page,
   // which left the table empty under a "Page 3 of 2" pager.
@@ -405,6 +474,10 @@ export function TransactionTable ({ transactions, showAccount = false }) {
             <SelectContent>
               <SelectItem value="INCOME">Income</SelectItem>
               <SelectItem value="EXPENSE">Expense</SelectItem>
+              {/* One option for both legs. Filtering by "Transfer" on an
+                  account page wants everything that moved money in or out of
+                  it through a transfer, not one direction of it. */}
+              <SelectItem value="TRANSFER">Transfer</SelectItem>
             </SelectContent>
           </Select>
 
@@ -487,8 +560,8 @@ export function TransactionTable ({ transactions, showAccount = false }) {
               className={HIT_AREA}
               onCheckedChange={handleSelectAll}
               checked={
-                selectedIDs.length === paginatedTransactions.length &&
-                paginatedTransactions.length > 0
+                selectedIDs.length === selectableOnPage.length &&
+                selectableOnPage.length > 0
               }
             />
             Select all on this page
@@ -499,7 +572,6 @@ export function TransactionTable ({ transactions, showAccount = false }) {
           <EmptyState filtered={hasFilters} onClear={handleClearFilters} />
         ) : (
           paginatedTransactions.map((transaction) => {
-            const expense = transaction.type === "EXPENSE";
 
             return (
               <div
@@ -510,7 +582,12 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                   className={cn("mt-1 shrink-0", HIT_AREA)}
                   onCheckedChange={() => handleSelect(transaction.id)}
                   checked={selectedIDs.includes(transaction.id)}
-                  aria-label={`Select ${transaction.description || "transaction"}`}
+                  disabled={Boolean(transaction.transferId)}
+                  aria-label={
+                    transaction.transferId
+                      ? "Part of a transfer — delete the transfer instead"
+                      : `Select ${transaction.description || "transaction"}`
+                  }
                 />
 
                 <div className="min-w-0 flex-1">
@@ -521,10 +598,10 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                     <span
                       className={cn(
                         "shrink-0 whitespace-nowrap font-medium tabular-nums",
-                        expense ? "text-negative" : "text-positive"
+                        amountClass(transaction.type)
                       )}
                     >
-                      {expense ? "-" : "+"}
+                      {amountSign(transaction.type)}
                       {formatCurrency(transaction.amount)}
                     </span>
                   </div>
@@ -557,10 +634,15 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                 </div>
 
                 <RowActions
+                  transfer={Boolean(transaction.transferId)}
                   onEdit={() =>
                     router.push(`/transaction/create?edit=${transaction.id}`)
                   }
-                  onDelete={() => deleteTransactions([transaction.id])}
+                  onDelete={() =>
+                    transaction.transferId
+                      ? deleteTransfer(transaction.transferId)
+                      : deleteTransactions([transaction.id])
+                  }
                 />
               </div>
             );
@@ -578,8 +660,8 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                   className={HIT_AREA}
                   onCheckedChange={handleSelectAll}
                   checked={
-                    selectedIDs.length === paginatedTransactions.length &&
-                    paginatedTransactions.length > 0
+                    selectedIDs.length === selectableOnPage.length &&
+                    selectableOnPage.length > 0
                   }
                 />
               </TableHead>
@@ -626,7 +708,12 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                       className={HIT_AREA}
                       onCheckedChange={() => handleSelect(transaction.id)}
                       checked={selectedIDs.includes(transaction.id)}
-                      aria-label={`Select ${transaction.description || "transaction"}`}
+                      disabled={Boolean(transaction.transferId)}
+                      aria-label={
+                        transaction.transferId
+                          ? "Part of a transfer — delete the transfer instead"
+                          : `Select ${transaction.description || "transaction"}`
+                      }
                     />
                   </TableCell>
                   <TableCell>
@@ -665,20 +752,23 @@ export function TransactionTable ({ transactions, showAccount = false }) {
                   <TableCell
                     className={cn(
                       "whitespace-nowrap text-right font-medium tabular-nums",
-                      transaction.type === "EXPENSE"
-                        ? "text-negative"
-                        : "text-positive"
+                      amountClass(transaction.type)
                     )}
                   >
-                    {transaction.type === "EXPENSE" ? "-" : "+"}
+                    {amountSign(transaction.type)}
                     {formatCurrency(transaction.amount)}
                   </TableCell>
                   <TableCell>
                     <RowActions
+                      transfer={Boolean(transaction.transferId)}
                       onEdit={() =>
                         router.push(`/transaction/create?edit=${transaction.id}`)
                       }
-                      onDelete={() => deleteTransactions([transaction.id])}
+                      onDelete={() =>
+                        transaction.transferId
+                          ? deleteTransfer(transaction.transferId)
+                          : deleteTransactions([transaction.id])
+                      }
                     />
                   </TableCell>
                 </TableRow>

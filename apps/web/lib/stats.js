@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { adminDb } from "./prisma";
 import { monthBounds, monthBoundsFor, previousMonth, zonedYearMonth } from "./time";
+import { isIncomeType, isTransferType } from "./money";
 
 // Invalidated by the actions that change a number (see revalidateTag calls),
 // so a new account, transaction or rating shows up on the next page load. The
@@ -61,9 +62,14 @@ async function averageSavedAmount() {
 
   const totals = new Map();
   for (const row of rows) {
+    // This figure is PUBLISHED -- it is the "average saved" number on the
+    // landing page. A transfer counted as an expense here would have
+    // understated every transferring account's savings and moved a public
+    // claim about the product, so the skip matters more here than anywhere.
+    if (isTransferType(row.type)) continue;
     const entry = totals.get(row.userId) ?? { income: 0, expenses: 0 };
     const amount = row._sum.amount?.toNumber() ?? 0;
-    if (row.type === "INCOME") entry.income += amount;
+    if (isIncomeType(row.type)) entry.income += amount;
     else entry.expenses += amount;
     totals.set(row.userId, entry);
   }
@@ -116,9 +122,10 @@ async function improvedSavingsShare() {
 
     const byUser = new Map();
     for (const row of rows) {
+      if (isTransferType(row.type)) continue;
       const entry = byUser.get(row.userId) ?? { income: 0, expenses: 0 };
       const amount = row._sum.amount?.toNumber() ?? 0;
-      if (row.type === "INCOME") entry.income += amount;
+      if (isIncomeType(row.type)) entry.income += amount;
       else entry.expenses += amount;
       byUser.set(row.userId, entry);
     }

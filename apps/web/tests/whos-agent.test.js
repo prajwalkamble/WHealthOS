@@ -488,12 +488,27 @@ describe("Figures that cannot honestly be given", () => {
 describe("What this ledger cannot represent", () => {
   const caveats = caveatsFor(Object.values(SECTIONS)).join(" ");
 
-  it("admits a transfer between the person's own accounts is counted twice", () => {
-    // Transaction.type is INCOME or EXPENSE and there is no transfer type, so
-    // moving money between two of your own accounts lands in both totals.
-    // The assistant must never imply the totals exclude it.
-    expect(caveats).toContain("no concept of a transfer");
-    expect(caveats).toContain("inflates both totals");
+  it("says transfers are excluded, and warns about the balance gap they leave", () => {
+    // This guard used to assert the opposite -- that the ledger had no
+    // transfer type and that moving money between two of your own accounts
+    // landed in both totals. True until internal transfers shipped
+    // (2026-11-12); false afterwards, and a caveat that is false is worse
+    // than none: the assistant would tell somebody their correct figures
+    // could not be trusted.
+    //
+    // What has to remain is the consequence that IS still true. A transfer
+    // moves a balance without being income or spending, so an account can
+    // change by an amount the month's totals do not explain -- and the
+    // assistant has to know that is a transfer rather than an error.
+    expect(caveats).toContain("recorded as a transfer and is excluded from income");
+    expect(caveats).toContain(
+      "an account balance can move by an amount the income and expense figures do not account for"
+    );
+    expect(caveats).toContain("Never describe a transfer as income or as spending");
+
+    // And the old claim must be gone, not merely outnumbered.
+    expect(caveats).not.toContain("no concept of a transfer");
+    expect(caveats).not.toContain("inflates both totals");
   });
 
   // This guard used to assert the opposite: that the ledger had NO currency

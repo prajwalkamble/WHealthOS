@@ -29,8 +29,14 @@ afterEach(() => {
 });
 
 // A transaction client that records what was asked of it.
-const fakeTx = (count) => {
-  const calls = { raw: [], counted: [] };
+//
+// Two counts, because the allowance is spent by two kinds of row: ordinary
+// transactions, and transfers -- which write two transaction legs each and
+// must still cost one unit, so the legs are excluded and the transfer counted
+// in their place. `transfers` defaults to 0, so every existing case here reads
+// exactly as it did when the quota counted transactions alone.
+const fakeTx = (count, transfers = 0) => {
+  const calls = { raw: [], counted: [], countedTransfers: [] };
   return {
     calls,
     $executeRaw: (...args) => {
@@ -41,6 +47,12 @@ const fakeTx = (count) => {
       count: (args) => {
         calls.counted.push(args);
         return Promise.resolve(count);
+      },
+    },
+    transfer: {
+      count: (args) => {
+        calls.countedTransfers.push(args);
+        return Promise.resolve(transfers);
       },
     },
   };
@@ -110,6 +122,38 @@ describe("consuming today's allowance", () => {
     expect(where.userId).toBe("user-1");
     expect(where.createdAt.gte.getTime()).toBe(from.getTime());
     expect(where.createdAt.lte.getTime()).toBe(to.getTime());
+  });
+
+  it("charges a transfer one unit, not the two rows it writes", async () => {
+    // An internal transfer writes a debit leg and a credit leg. Counting
+    // transaction rows alone would charge it double, so the advertised "5 per
+    // day" would silently become two and a half for anybody who moves money
+    // between their own accounts.
+    //
+    // Two ordinary transactions and one transfer -- which is two more rows in
+    // the table -- is three units used, not four.
+    const tx = fakeTx(2, 1);
+    const result = await consumeDailyTransaction(tx, "user-1", "free");
+    expect(result.used).toBe(3);
+    expect(result.remaining).toBe(2);
+
+    // The transaction count must exclude the legs, or they would be counted
+    // here AND again as the transfer.
+    expect(tx.calls.counted[0].where.transferId).toBeNull();
+    // And the transfer count is scoped and windowed the same way.
+    const transferWhere = tx.calls.countedTransfers[0].where;
+    expect(transferWhere.userId).toBe("user-1");
+    expect(transferWhere.createdAt.gte).toBeInstanceOf(Date);
+  });
+
+  it("refuses when transfers alone have spent the allowance", async () => {
+    // Five transfers and no ordinary transactions is five units, so the free
+    // allowance is gone -- a transfer has to be able to exhaust it, or the
+    // exclusion of its legs would have turned into a free write path.
+    // (This suite forces BILLING_QUOTA_ENFORCEMENT on, so the refusal throws.)
+    await expect(
+      consumeDailyTransaction(fakeTx(0, 5), "user-1", "free")
+    ).rejects.toThrow(QuotaError);
   });
 
   it("reports what is left", async () => {

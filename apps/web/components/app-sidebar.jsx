@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import PrefetchLink from "@/components/navigation/prefetch-link";
 import {
   ArrowLeftRight,
+  ArrowRightLeft,
   BarChart3,
   CreditCard,
   LayoutDashboard,
@@ -49,6 +50,7 @@ const NAV_ITEMS = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Transactions", url: "/transactions", icon: ArrowLeftRight },
   { title: "Accounts", url: "/accounts", icon: Wallet },
+  { title: "Fund Transfer", url: "/transfer", icon: ArrowRightLeft },
   { title: "Cards", url: "/cards", icon: CreditCard },
   { title: "Budgets", url: "/budgets", icon: PiggyBank },
   { title: "Goals", url: "/goals", icon: Target },
@@ -131,7 +133,17 @@ const ComingSoonItem = ({ item }) => {
 // items: demo mode passes its own list, pointing at /demo/* and locking the
 // sections a guest cannot reach. Everything else about the rail is the same,
 // so the two shells cannot drift apart visually.
-const AppSidebar = ({ items = NAV_ITEMS, homeHref = "/dashboard" }) => {
+// homeHref: where the logo in the rail's header goes.
+//
+// The marketing site, not /dashboard. A wordmark is the way out of a product
+// and back to the thing it belongs to -- which is what the same logo does in
+// the public header and in the footer, both of which point at "/". Pointing
+// it at /dashboard made it a no-op on the page people are usually looking at,
+// and left the app with no link home at all.
+//
+// The demo shell overrides this with "/demo", because inside the demo the
+// product's own front door is the demo's.
+const AppSidebar = ({ items = NAV_ITEMS, homeHref = "/" }) => {
   const pathname = usePathname();
   // Sidebar Variant and Sidebar Collapse from the customiser. These are props
   // rather than CSS, so they come from the provider.
@@ -146,7 +158,13 @@ const AppSidebar = ({ items = NAV_ITEMS, homeHref = "/dashboard" }) => {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <PrefetchLink href={homeHref}>
+              {/* intent="none" now that this leaves the product. The default
+                  tier warms the destination on hover, which was right for
+                  /dashboard and is wrong for "/": it is the heaviest route in
+                  the build and server-rendered on demand, so every pointer
+                  crossing the logo would have run it. A link out is reached
+                  deliberately or not at all. */}
+              <PrefetchLink href={homeHref} intent="none">
                 {/* Was the light PNG only, which left a near-black navy
                     wordmark on the dark rail. currentColor fixes that, and
                     the collapsed rail drops to the standalone W rather than

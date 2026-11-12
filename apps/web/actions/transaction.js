@@ -115,7 +115,12 @@ export async function createTransaction(rawData) {
 export async function getTransaction(id) {
   return withCurrentTenant(async (tx, userId) => {
     const transaction = await tx.transaction.findFirst({
-      where: { id, userId },
+      // transferId null: a transfer leg is not an editable transaction, so the
+      // edit page must not be able to load one. Refusing it here rather than
+      // at submit time means the person gets a 404 instead of a form that
+      // looks ordinary, lets them change the amount, and is then rejected --
+      // and it means the form never has to understand a type it cannot offer.
+      where: { id, userId, transferId: null },
     });
 
     return transaction ? serializeAmount(transaction) : null;
@@ -141,6 +146,22 @@ export async function updateTransaction(id, rawData) {
           where: { id, userId },
         });
         if (!original) throw new ActionError("Transaction not found");
+
+        // A transfer leg cannot be edited as a transaction.
+        //
+        // The database would stop it anyway -- transactions_transfer_leg_check
+        // forbids an INCOME or EXPENSE row carrying a transferId, and this
+        // payload can only be one of those -- but a constraint violation
+        // surfaces as "Something went wrong", and the real answer is specific
+        // and actionable. Editing one side of a transfer is not a thing that
+        // could be allowed in any case: it would change one balance and leave
+        // the other, and the transfers row would still claim the old amount.
+        if (original.transferId) {
+          throw new ActionError(
+            "This is part of a transfer. Delete the transfer and make a new " +
+              "one to change it."
+          );
+        }
 
         const targetAccount = await tx.account.findFirst({
           where: { id: data.accountId, userId },

@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { periodTotals } from "../analytics";
+import { balanceEffect } from "../money";
 import {
   BRAND_NAME,
   INK,
@@ -363,14 +364,19 @@ export function transactionStatement({
     const bottom = doc.page.height - PAGE.margins.bottom;
 
     for (const row of rows) {
-      const expense = row.type === "EXPENSE";
+      // Which column the amount belongs in, decided by the sign the row
+      // applies to its account rather than by testing for EXPENSE. A
+      // TRANSFER_OUT is a debit on the statement and a TRANSFER_IN a credit,
+      // which is exactly what balanceEffect already says; testing for EXPENSE
+      // put every transfer out in the credit column.
+      const debit = balanceEffect(row.type, row.amount) < 0;
       const cells = {
         date: dateLabel(row.date, timeZone),
         description: row.description || "—",
         category: row.category || "",
         account: row.accountName || "",
-        debit: expense ? money(row.amount) : "",
-        credit: expense ? "" : money(row.amount),
+        debit: debit ? money(row.amount) : "",
+        credit: debit ? "" : money(row.amount),
       };
 
       // Measured before drawing, so a wrapped description decides the row

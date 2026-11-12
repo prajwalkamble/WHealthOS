@@ -71,3 +71,13 @@ database/generated/
 docs/security/PRODUCTION_SECURITY_AUDIT.md
 docs/security/SECURITY_REMEDIATION_PLAN.md
 docs/testing/
+docs/performance/FINAL_PERFORMANCE_AUDIT.md
+docs/deployment/PRODUCTION_GO_LIVE_CHECKLIST.md
+
+# Agent tooling. Skills vendored from other people's repositories, the lockfile
+# that pins them, local plugin settings, and the artefacts of design runs. None
+# of it is the application, and .agents/ alone is 3.8MB of third-party text.
+.agents/
+.claude/
+.hallmark/
+skills-lock.json

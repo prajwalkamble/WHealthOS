@@ -23,32 +23,36 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  clerkUserId  String        @unique // clerk user id
+  id                        String                     @id @default(uuid())
+  clerkUserId               String                     @unique // clerk user id
   // Optional: Clerk allows sign-in without an email address (phone, some
   // OAuth providers). Emails are simply not sent to users without one.
-  email        String?       @unique
-  name         String
-  imageUrl     String
-  transactions Transaction[]
-  accounts     Account[]
-  budgets      Budget[]
-  cards        Card[]
-  goals        Goal[]
-  contributions GoalContribution[]
-  rating       Rating?
-  feedback     Feedback[]
+  email                     String?                    @unique
+  name                      String
+  imageUrl                  String
+  transactions              Transaction[]
+  accounts                  Account[]
+  // Internal account-to-account transfers. The ledger effects live on the
+  // Transaction rows this points at; the row itself is what makes two of them
+  // one operation.
+  transfers                 Transfer[]
+  budgets                   Budget[]
+  cards                     Card[]
+  goals                     Goal[]
+  contributions             GoalContribution[]
+  rating                    Rating?
+  feedback                  Feedback[]
   // Every legal document acceptance this person has given. See
   // apps/web/lib/legal/versions.js for what the version strings mean.
-  legalConsents LegalConsent[]
+  legalConsents             LegalConsent[]
   // Billing. A user has at most one live subscription at a time -- enforced by
   // a partial unique index in the migration, not by this relation -- and keeps
   // the history of the ones that ended.
-  subscriptions Subscription[]
+  subscriptions             Subscription[]
   // Checkout attempts: the record that a purchase was started, written before
   // Razorpay is called so a retry can find it. Kept after the fact as the
   // audit trail of what was tried.
-  checkoutAttempts CheckoutAttempt[]
+  checkoutAttempts          CheckoutAttempt[]
   // Subscription emails this person has been sent, or is owed. One row per
   // qualifying event, and the unique key on it is what makes "exactly one
   // confirmation per activation" a database guarantee rather than a hope.
@@ -58,13 +62,13 @@ model User {
   // Appearance settings from lib/preferences.js (theme colour, chart colours,
   // fonts, scale, radius, colour schema, layout, sidebar). One column rather
   // than ten, since they are only ever read and written together.
-  preferences  Json?
+  preferences               Json?
   // Whether the monthly summary email may include AI commentary. Writing the
   // commentary is the only thing that sends this person's figures to an
   // external model, so turning it off is what stops that -- the report itself
   // still goes out, with the same real totals and no commentary section.
   // Defaults to true, which is what every existing account already had.
-  monthlyInsights Boolean    @default(true)
+  monthlyInsights           Boolean                    @default(true)
   // The currency this person reads their figures in. A DISPLAY choice, not a
   // statement about any account: changing it reformats and converts what is
   // shown and rewrites nothing. Null means never chosen, in which case the
@@ -75,9 +79,9 @@ model User {
   // one string is wasteful; and `preferences` is gated behind the paid
   // appearance entitlement, while reading your own money in your own currency
   // is not something to charge for.
-  displayCurrency String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  displayCurrency           String?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   @@map("users")
 }
@@ -96,6 +100,11 @@ model Account {
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   cards        Card[]
+  // Two relations rather than one, because an account is on a different side
+  // of a transfer depending on which. Named, since Prisma cannot tell two
+  // relations to the same model apart otherwise.
+  transfersOut Transfer[]    @relation("TransferSource")
+  transfersIn  Transfer[]    @relation("TransferDestination")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -134,6 +143,21 @@ model Transaction {
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   accountId         String
   account           Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // Set on the two legs of an internal transfer, null on every ordinary
+  // transaction. Cascade: deleting a transfer removes both of its legs in one
+  // statement, so there is no state in which one survives the other.
+  //
+  // Two constraints in the migration, which Prisma cannot express here because
+  // both are partial or conditional, enforce what this column means:
+  //
+  //   transactions_transfer_leg_key    UNIQUE (transferId, type) WHERE
+  //                                    transferId IS NOT NULL -- one debit and
+  //                                    one credit per transfer, never two
+  //   transactions_transfer_leg_check  a TRANSFER_OUT/TRANSFER_IN row must have
+  //                                    a transferId, and an INCOME/EXPENSE row
+  //                                    must not
+  transferId        String?
+  transfer          Transfer?          @relation(fields: [transferId], references: [id], onDelete: Cascade)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -148,6 +172,16 @@ model Transaction {
 enum TransactionType {
   INCOME
   EXPENSE
+  // The two legs of an internal transfer -- see the Transfer model. Neither is
+  // income and neither is an expense: a transfer between accounts the same
+  // person owns changes two balances and leaves the total untouched.
+  //
+  // New members rather than a flag on an INCOME/EXPENSE row, because most
+  // aggregation here filters the type by name and so excludes these for free.
+  // A flag would have had every one of those count a transfer as real money
+  // earned or spent unless it remembered not to.
+  TRANSFER_OUT
+  TRANSFER_IN
 }
 
 enum RecurringInterval {
@@ -161,6 +195,82 @@ enum TransactionStatus {
   PENDING
   COMPLETED
   FAILED
+}
+
+// One internal transfer: money moved between two accounts the same person
+// owns. Not income, not an expense, and not a payment to anybody.
+//
+// WHY THIS ROW EXISTS AT ALL, given that the two Transaction legs below it
+// already carry the accounting effect. Three things only a parent row can be:
+//
+//   - one identity. A transfer is one act, and the person is shown one
+//     reference for it. Two transactions that happen to agree are not that,
+//     and nothing could reliably pair them up afterwards.
+//   - one idempotency key. A retried confirmation has to lose somewhere, and
+//     a unique column on the single logical operation is that somewhere.
+//   - one thing to delete. Removing this row cascades to both legs, so half a
+//     transfer is not a state the database can be in.
+//
+// IMMUTABLE by policy and by RLS: there is no update path, and the UPDATE
+// policy in the migration admits only the job runner. Correcting a transfer
+// means deleting it -- which reverses both balances atomically -- and making
+// another. Editing one in place would mean reversing two balances and applying
+// two more against accounts that may have moved underneath, for a correction
+// that is two clicks either way.
+//
+// SAME-CURRENCY only. Both accounts must already be in the same currency, so
+// there is one amount here and no rate, no source/destination pair and no
+// rounding policy. The refusal is the service's; the absence of the columns is
+// why a later change cannot quietly start converting. See
+// docs/features/INTERNAL_ACCOUNT_TRANSFERS.md.
+model Transfer {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fromAccountId String
+  fromAccount   Account @relation("TransferSource", fields: [fromAccountId], references: [id], onDelete: Cascade)
+  toAccountId   String
+  toAccount     Account @relation("TransferDestination", fields: [toAccountId], references: [id], onDelete: Cascade)
+
+  // Positive, and greater than zero -- a CHECK constraint in the migration,
+  // not merely a validated field. Money, so Decimal.
+  amount      Decimal
+  // ISO 4217, from lib/currency/registry.js. Both accounts' currency, copied
+  // at the time of the transfer and never updated: what a transfer was in is a
+  // historical fact, and moving an account to another currency must not
+  // rewrite its past. Mirrors Transaction.currency, for the same reason.
+  currency    String
+  // The date the person says the money moved, which is what both legs are
+  // dated. Balances move on commit either way -- the same as an ordinary
+  // transaction, whose date is also a label rather than a schedule.
+  date        DateTime
+  description String?
+
+  // "<userId>:<key from the browser>". Unique, so a replayed confirmation --
+  // a double click, a retried request after a timeout, a refresh on the
+  // confirmation step -- is refused by the database and answered with the
+  // transfer that already exists, rather than making a second one.
+  //
+  // Scoped to the user by the service: an unscoped key would let one person's
+  // guess collide with another's, which is an information leak as well as a
+  // correctness bug.
+  idempotencyKey String @unique
+
+  // Exactly two: one TRANSFER_OUT against fromAccount and one TRANSFER_IN
+  // against toAccount. Guaranteed to be at most one of each by a partial
+  // unique index on (transferId, type) in the migration.
+  legs Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Two CHECK constraints live in the migration, which Prisma has no syntax
+  // for: amount > 0, and fromAccountId <> toAccountId.
+  @@index([userId, date(sort: Desc)], map: "transfers_userId_date_idx")
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@map("transfers")
 }
 
 // A planned spending limit.
@@ -264,25 +374,25 @@ enum CardStatus {
 // stored alongside the target is a second source of truth that drifts the
 // moment a contribution is corrected or removed.
 model Goal {
-  id           String             @id @default(uuid())
-  name         String
-  description  String?
-  targetAmount Decimal
+  id            String             @id @default(uuid())
+  name          String
+  description   String?
+  targetAmount  Decimal
   // ISO 4217, from lib/currency/registry.js. The currency this amount is
   // actually in -- never the currency the viewer has chosen to read in.
   // See the migration for why every existing row is INR.
   // Contributions do not carry one: a contribution always belongs to exactly
   // one goal and is counted towards that goal's target, so a second currency
   // on it could only ever disagree with this one.
-  currency     String             @default("INR")
+  currency      String             @default("INR")
   // Optional: not every objective has a deadline.
-  targetDate   DateTime?
-  status       GoalStatus         @default(ACTIVE)
-  userId       String
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetDate    DateTime?
+  status        GoalStatus         @default(ACTIVE)
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributions GoalContribution[]
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([userId])
   // Supports the goals_isolation RLS predicate on the list page's read path
@@ -331,7 +441,7 @@ model Feedback {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // One of two known values, mirroring FEEDBACK_TYPES in app/lib/schema.js.
-  type FeedbackType
+  type    FeedbackType
   // As it was typed. The 4000-character cap is the schema's, in one place.
   message String
 
@@ -448,7 +558,7 @@ model InboundEmail {
   // Plain text only, truncated before storage.
   text        String?
   // Metadata only: attachments are counted, never downloaded or stored.
-  attachments Int    @default(0)
+  attachments Int     @default(0)
 
   status      InboundEmailStatus @default(RECEIVED)
   forwardedAt DateTime?
@@ -544,7 +654,7 @@ model Subscription {
   // are retried for days -- and is recorded without being applied.
   lastEventAt DateTime?
 
-  payments Payment[]
+  payments      Payment[]
   notifications SubscriptionNotification[]
 
   createdAt DateTime @default(now())
@@ -554,7 +664,6 @@ model Subscription {
   @@index([status])
   @@map("subscriptions")
 }
-
 
 // An attempt to buy something: written BEFORE Razorpay is called.
 //
@@ -617,15 +726,15 @@ model Payment {
   subscriptionId String
   subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
-  provider           PaymentProvider @default(RAZORPAY)
-  providerPaymentId  String          @unique
+  provider          PaymentProvider @default(RAZORPAY)
+  providerPaymentId String          @unique
   // The provider's invoice for this charge, where the event carried one.
-  providerInvoiceId  String?
+  providerInvoiceId String?
 
   // Minor units. Integer, because money in a currency's smallest unit is a
   // count and never a fraction of one.
   amount   Int
-  currency String @default("INR")
+  currency String        @default("INR")
   status   PaymentStatus
 
   // The billing period this charge covers, copied from the subscription at the
@@ -634,8 +743,8 @@ model Payment {
   periodEnd   DateTime?
 
   paidAt    DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([subscriptionId])
   @@map("payments")
@@ -708,7 +817,6 @@ enum SubscriptionStatus {
   PAUSED
 }
 
-
 // Where an attempt got to. Only OPEN and CREATED are in flight; the other
 // three are terminal and free the slot for another attempt.
 enum CheckoutAttemptStatus {
@@ -741,7 +849,6 @@ enum BillingEventStatus {
   IGNORED
   FAILED
 }
-
 
 // --- Subscription notifications ---------------------------------------------
 

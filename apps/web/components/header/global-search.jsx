@@ -6,6 +6,7 @@ import { Loader2, Search } from "lucide-react";
 import { searchEverything } from "@/actions/search";
 import { defaultCategories } from "@/data/categories";
 import { cn } from "@/lib/utils";
+import { amountClass, amountSign } from "@/lib/money";
 import { useCurrency } from "@/components/currency-provider";
 
 const LABELS = Object.fromEntries(
@@ -162,15 +163,15 @@ const GlobalSearch = ({ className }) => {
                         : ""}
                     </span>
                   </span>
+                  {/* Signed and coloured from lib/money.js, so a transfer leg
+                      is neutral rather than drawn as money earned or spent. */}
                   <span
                     className={cn(
                       "shrink-0 tabular-nums",
-                      transaction.type === "INCOME"
-                        ? "text-positive"
-                        : "text-negative"
+                      amountClass(transaction.type)
                     )}
                   >
-                    {transaction.type === "INCOME" ? "+" : "-"}
+                    {amountSign(transaction.type)}
                     {formatCurrency(transaction.amount)}
                   </span>
                 </button>

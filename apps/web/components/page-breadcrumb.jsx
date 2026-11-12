@@ -17,6 +17,7 @@ const SECTIONS = {
   dashboard: { label: "Dashboard", href: "/dashboard" },
   accounts: { label: "Accounts", href: "/accounts" },
   account: { label: "Accounts", href: "/accounts", leaf: "Account details" },
+  transfer: { label: "Fund Transfer", href: "/transfer" },
   transactions: { label: "Transactions", href: "/transactions" },
   transaction: {
     label: "Transactions",

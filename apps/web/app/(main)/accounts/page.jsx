@@ -1,10 +1,11 @@
 import { getUserAccounts } from "@/lib/queries";
 import AccountCard from "../dashboard/_components/account-card";
 import CreateAccountDrawer from "@/components/create-account-drawer";
+import TransferDrawer from "@/components/transfer-drawer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import AccountsTotal from "./_components/accounts-total";
-import { Plus, Wallet } from "lucide-react";
+import { ArrowLeftRight, Plus, Wallet } from "lucide-react";
 
 export default async function AccountsPage() {
   const accounts = await getUserAccounts();
@@ -23,12 +24,27 @@ export default async function AccountsPage() {
             <AccountsTotal count={accounts.length} total={total} />
           </p>
         </div>
-        <CreateAccountDrawer>
-          <Button size="sm" className="h-9">
-            <Plus className="h-4 w-4" />
-            New Account
-          </Button>
-        </CreateAccountDrawer>
+        {/* Two actions on this page, in the order they are reached: you make
+            accounts before you move anything between them, so Transfer is the
+            secondary one. Hidden entirely below two accounts -- an action that
+            cannot be completed is worse than an action that is absent, and the
+            drawer would only be able to explain why. */}
+        <div className="flex items-center gap-2">
+          {accounts.length >= 2 && (
+            <TransferDrawer accounts={accounts}>
+              <Button size="sm" variant="outline" className="h-9">
+                <ArrowLeftRight className="h-4 w-4" />
+                Transfer
+              </Button>
+            </TransferDrawer>
+          )}
+          <CreateAccountDrawer>
+            <Button size="sm" className="h-9">
+              <Plus className="h-4 w-4" />
+              New Account
+            </Button>
+          </CreateAccountDrawer>
+        </div>
       </div>
 
       {accounts.length === 0 ? (

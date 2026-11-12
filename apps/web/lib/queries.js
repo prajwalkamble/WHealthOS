@@ -9,6 +9,7 @@
 //
 // Writes stay in actions/: they are what the browser actually invokes.
 
+import { balanceEffect } from "@/lib/money";
 import {
   APP_TIME_ZONE,
   dayWindowBounds,
@@ -119,10 +120,19 @@ async function summaryFor(tx, userId) {
   // had no balance then, and working one back from today's figure lands on
   // its opening balance -- whatever was typed at creation -- which made a
   // ₹5,000 opening read as the starting point and today's total as +1,142%.
+  //
+  // Signed through balanceEffect rather than by testing for INCOME, because
+  // this groupBy has no type filter and so returns transfer legs too. The old
+  // `type === "INCOME" ? amount : -amount` read a TRANSFER_IN as a debit, so
+  // an account that received a transfer this month had its 1st-of-the-month
+  // balance reconstructed too high by twice the transfer -- and the Total
+  // Balance change on the dashboard was wrong by that much. balanceEffect is
+  // the same function that moved the balance in the first place, so unwinding
+  // through it cannot disagree with it.
   const netSinceFirst = new Map();
   for (const row of sinceFirst) {
     const amount = row._sum.amount?.toNumber() ?? 0;
-    const signed = row.type === "INCOME" ? amount : -amount;
+    const signed = balanceEffect(row.type, amount);
     netSinceFirst.set(row.accountId, (netSinceFirst.get(row.accountId) ?? 0) + signed);
   }
   const existing = accounts.filter((a) => a.createdAt < thisMonth.startOfMonth);
@@ -625,6 +635,18 @@ export async function getAnalytics({
       tx.transaction.findMany({
         where: {
           userId,
+          // Earnings and spending only. Every figure this page draws --
+          // monthly flow, the period totals, the category breakdown, the
+          // Sankey -- excludes internal transfers, so the rows are filtered
+          // here too and not just inside each aggregation.
+          //
+          // Doing it in the query rather than only in lib/analytics.js is what
+          // keeps `hasAnyTransactions` and `hasPriorData` honest. Those are
+          // row counts, and a month whose only activity was a transfer would
+          // otherwise report that it had data and then draw a page of zeros,
+          // with the "no transaction data for this period" message -- the one
+          // that explains it -- suppressed by the very rows it should ignore.
+          transferId: null,
           date: { gte: from, lte: to },
           ...(accountId ? { accountId } : {}),
           ...(type ? { type } : {}),

@@ -11,6 +11,10 @@ const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
   "/account(.*)",
   "/accounts(.*)",
+  // Internal transfers. The page reads the person's accounts and the server
+  // action refuses an anonymous caller on its own; listed here as well so an
+  // unauthenticated request never reaches either.
+  "/transfer(.*)",
   "/api/export(.*)",
   // The WHOS chat endpoint. Listed here as well as checking the session
   // itself: the route refuses an unauthenticated request on its own, and this

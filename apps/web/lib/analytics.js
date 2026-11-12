@@ -15,6 +15,10 @@
 //      added, these sums become wrong and must be grouped by it first.
 
 import { APP_TIME_ZONE, monthBoundsFor, previousMonth, zonedYearMonth } from "./time";
+// isTransferType / isIncomeType rather than a local `type === "INCOME"` test.
+// Every money total in this file used a binary split, which silently filed
+// internal transfers as spending the moment the transaction types grew.
+import { isIncomeType, isTransferType } from "./money";
 
 // Percentage change from `before` to `after`.
 //
@@ -74,7 +78,11 @@ export function monthlyFlow(window, transactions) {
   for (const row of transactions) {
     const bucket = buckets.get(monthKeyOf(row.date));
     if (!bucket) continue;
-    if (row.type === "INCOME") bucket.income += row.amount;
+    // Transfer legs are neither, and are skipped rather than falling into the
+    // `else`. Moving money between two of your own accounts is not a month's
+    // spending, and the old binary split counted every TRANSFER_OUT as one.
+    if (isTransferType(row.type)) continue;
+    if (isIncomeType(row.type)) bucket.income += row.amount;
     else bucket.expenses += row.amount;
   }
 
@@ -129,7 +137,11 @@ export function periodTotals(rows) {
   let income = 0;
   let expenses = 0;
   for (const row of rows) {
-    if (row.type === "INCOME") income += row.amount;
+    // Skipped, not defaulted into expenses. This function also feeds the
+    // savings rate, where counting a transfer as spending would report
+    // somebody who moved ₹10,000 into savings as having saved less.
+    if (isTransferType(row.type)) continue;
+    if (isIncomeType(row.type)) income += row.amount;
     else expenses += row.amount;
   }
   const net = income - expenses;
@@ -221,7 +233,12 @@ export function cashflowSummary(transactions, { knownCategories = null } = {}) {
   const expenses = new Map();
 
   for (const row of transactions) {
-    const side = row.type === "INCOME" ? income : expenses;
+    // A transfer has no side of this diagram to be on: it is not money
+    // arriving and not money leaving. Drawn as an expense ribbon -- which is
+    // what the old ternary did -- it invented a spending category called
+    // "Transfer Out" and widened the outflow by money that never left.
+    if (isTransferType(row.type)) continue;
+    const side = isIncomeType(row.type) ? income : expenses;
     const key = bucketKey(row.category, knownCategories);
     const amount = Number(row.amount) || 0;
     side.set(key, (side.get(key) ?? 0) + amount);

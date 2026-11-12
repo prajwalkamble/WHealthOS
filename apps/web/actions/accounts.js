@@ -8,6 +8,7 @@ import { ActionError, runAction } from "@/lib/action-error";
 import { enforceRateLimit } from "@/lib/arcjet";
 import { requireClerkUserId } from "@/lib/session";
 import { APP_TIME_ZONE } from "@/lib/time";
+import { balanceEffect } from "@/lib/money";
 
 // The shared serializer (lib/queries.js), rather than a third copy of it.
 const serializeTransaction = serializeDecimals;
@@ -114,18 +115,48 @@ export async function bulkDeleteTransactions(transactionIds) {
           id: { in: transactionIds },
           userId,
         },
-        select: { id: true, type: true, amount: true, accountId: true },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          accountId: true,
+          transferId: true,
+        },
       });
 
       if (transactions.length === 0) return 0;
 
+      // A transfer leg is not deletable here, and this is the most important
+      // line in the file.
+      //
+      // The legs are ordinary transaction rows, so they appear in the table
+      // and could be selected and deleted like any other -- and deleting ONE
+      // of them would remove half a transfer: the debit backed out of the
+      // source while the credit stayed on the destination, which is money
+      // created from nothing, in a ledger that still looks internally tidy.
+      // Even deleting both at once would leave the transfers row behind with
+      // no legs.
+      //
+      // So the whole selection is refused rather than silently filtered.
+      // Filtering would delete the ordinary transactions and quietly keep the
+      // legs, and the person would be told the count they asked for.
+      // deleteInternalTransfer in actions/transfers.js is the way, and it
+      // removes both legs and reverses both balances in one transaction.
+      if (transactions.some((transaction) => transaction.transferId)) {
+        throw new ActionError(
+          "That selection includes part of a transfer. Delete the transfer " +
+            "itself to remove both sides of it."
+        );
+      }
+
       // Deleting an expense returns money to the account and deleting income
-      // takes it back out. amount is a Prisma Decimal, whose valueOf() is a
-      // string -- call toNumber() or the accumulator concatenates instead of
-      // adding.
+      // takes it back out: the negation of what the row applied, through the
+      // one function that applies it. amount is a Prisma Decimal, whose
+      // valueOf() is a string -- call toNumber() or the accumulator
+      // concatenates instead of adding.
       const accountBalanceChanges = transactions.reduce((acc, transaction) => {
         const amount = transaction.amount.toNumber();
-        const change = transaction.type === "EXPENSE" ? amount : -amount;
+        const change = -balanceEffect(transaction.type, amount);
 
         acc[transaction.accountId] = (acc[transaction.accountId] || 0) + change;
         return acc;

@@ -115,6 +115,75 @@ export const transactionInputSchema = z
     }
   });
 
+// --- Internal transfers -----------------------------------------------------
+//
+// What the browser may send, and nothing more. Notice what is absent: no
+// userId, no currency, no balance, no source or destination amount, no rate,
+// no status, and no transfer id. Every one of those is decided by the server
+// from rows it read itself -- see lib/transfers/service.js -- and zod dropping
+// unknown keys is what stops a crafted body offering one anyway.
+//
+// The financial rules (both accounts yours, same currency, sufficient funds,
+// amount precision for that currency) are NOT here. They need the account rows,
+// so they live in lib/transfers/rules.js and run against what the database
+// returns under a row lock. This schema's job is only the shape.
+
+// A client-generated key identifying one confirmation attempt, so a retry
+// answers with the transfer that already exists instead of making a second.
+//
+// Required rather than optional: an optional idempotency key is one a client
+// forgets to send on exactly the request that gets retried. A UUID rather than
+// any string, because the format is the only thing stopping an unbounded set of
+// junk keys accumulating in a unique index -- and because a client that has to
+// produce a UUID is a client that generated one per attempt rather than
+// reusing a constant.
+const idempotencyKey = z
+  .string()
+  .uuid("Invalid request key");
+
+export const transferInputSchema = z
+  .object({
+    fromAccountId: z.string().min(1, "Choose an account to transfer from"),
+    toAccountId: z.string().min(1, "Choose an account to transfer to"),
+    amount: z.coerce.number().pipe(positiveAmount),
+    date: z.coerce.date({ invalid_type_error: "Invalid date" }),
+    description: z.string().trim().max(500).optional().nullable(),
+    idempotencyKey,
+  })
+  .superRefine((data, ctx) => {
+    // Refused here as well as in rules.js and by a CHECK constraint on the
+    // table. Three times, because this is the one mistake a person makes by
+    // accident: the field it belongs to is named here, so the form marks it,
+    // while the other two exist for callers that never saw a form.
+    if (data.fromAccountId === data.toAccountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose two different accounts",
+        path: ["toAccountId"],
+      });
+    }
+  });
+
+// The browser form, where the amount is still a string and the key is added on
+// submit rather than being something a person types.
+export const transferSchema = z
+  .object({
+    fromAccountId: z.string().min(1, "Choose an account to transfer from"),
+    toAccountId: z.string().min(1, "Choose an account to transfer to"),
+    amount: z.string().min(1, "Amount is required"),
+    date: z.date({ required_error: "Date is required" }),
+    description: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.fromAccountId && data.fromAccountId === data.toAccountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose two different accounts",
+        path: ["toAccountId"],
+      });
+    }
+  });
+
 // 1-31, or nothing. A day of the month rather than a date: billing and due
 // days repeat, so storing a specific date would go stale after one cycle.
 const dayOfMonth = z

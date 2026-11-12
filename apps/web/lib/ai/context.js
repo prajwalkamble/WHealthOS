@@ -321,11 +321,22 @@ function goalsBlock(goals) {
 // corrected by the person who knows their own money better than it does.
 export function caveatsFor(sections) {
   const caveats = [
-    // Transaction has a `type` of INCOME or EXPENSE and nothing else. There is
-    // no transfer type and no counterparty column, so money moved between the
-    // person's own accounts is recorded as an expense on one and an income on
-    // the other, and lands in both totals.
-    "The ledger has no concept of a transfer. Money moved between the person's own accounts is recorded as an expense and an income, so it inflates both totals. Nothing here can identify or exclude it.",
+    // Corrected 2026-11-12, when internal transfers shipped. This used to say
+    // the ledger had no concept of a transfer and that every total was
+    // inflated by one -- true then, and the reason it was here. It is now
+    // false, and a caveat that is false is worse than no caveat: the
+    // assistant would warn a person their figures cannot be trusted when they
+    // can, and could talk somebody out of a correct number.
+    //
+    // Transaction.type now has TRANSFER_OUT and TRANSFER_IN, each leg linked
+    // to a transfers row, and every income, expense, savings-rate, category
+    // and cash-flow figure feeding this context excludes them -- see
+    // lib/money.js and the aggregation in lib/queries.js and lib/analytics.js.
+    // What remains worth saying is the part that is still a limitation: a
+    // transfer moves a balance without being earnings or spending, so an
+    // account's balance can change in a month whose income and expense totals
+    // do not explain the difference.
+    "Money moved between the person's own accounts is recorded as a transfer and is excluded from income, expenses, savings rate and every category total -- those figures are earnings and spending only. A consequence: an account balance can move by an amount the income and expense figures do not account for, and the explanation is a transfer rather than an error. Never describe a transfer as income or as spending.",
     // Accounts and transactions DO carry a currency now (the multi-currency
     // migration added one, defaulting to INR). What they do not have is any
     // conversion in this path: the loaders sum amounts without reading the
