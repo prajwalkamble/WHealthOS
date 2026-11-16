@@ -70,6 +70,20 @@ const MainLayout = async ({ children }) => {
   // compute a different one.
   const { ledger, rates } = await presentationData(user.id);
 
+  // Whether a control for `feature` should be OFFERED. A different question
+  // from whether the operation would be allowed: the server still decides
+  // that, and still must -- savePreferences refuses a paid setting and
+  // /api/ai/chat refuses a question, whatever this says.
+  //
+  // The same three terms the assistant below spells out inline, which
+  // tests/entitlement-coverage.test.js asserts are literally there -- so that
+  // one stays as it is and this names the rule for everything else. Costs no
+  // query: the plan comes from the rows checkUser() has already fetched.
+  const offers = (feature) =>
+    !enforcementEnabled() ||
+    devGrantsAll(user?.id) ||
+    planGrants(planIdFromRows(user?.subscriptions), feature);
+
   return (
     // Always wrapped: everything under (main) is signed in, and the shell is
     // full of Clerk components -- the avatar menu, the profile screen.
@@ -88,7 +102,10 @@ const MainLayout = async ({ children }) => {
             so the browser cannot read them -- and nothing is lost by telling
             it the answer, because the answer is not the authorisation. Someone
             flipping this boolean in devtools gets a badge and no features. */}
-        <AppHeader devAccess={devGrantsAll(user?.id)} />
+        <AppHeader
+          devAccess={devGrantsAll(user?.id)}
+          canCustomize={offers("appearance.customize")}
+        />
 
 
         {/* app-content: the Content Layout setting centres this column. */}

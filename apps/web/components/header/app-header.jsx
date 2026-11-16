@@ -13,7 +13,7 @@ import CurrencySelector from "@/components/currency-selector";
 // The signed-in app's top bar: the rail toggle, a search that spans
 // transactions and accounts, then notifications, appearance and the account
 // menu on the right.
-const AppHeader = ({ devAccess = false }) => {
+const AppHeader = ({ devAccess = false, canCustomize = false }) => {
   const { user, isLoaded } = useUser();
 
   // Clerk resolves in the browser, so the name appears on the pass after
@@ -56,7 +56,25 @@ const AppHeader = ({ devAccess = false }) => {
         <NotificationBell />
         {/* Everything under (main) is signed in. */}
         <ThemeToggle persist />
-        <ThemeCustomizer />
+        {/* Offered only to a plan that includes it. DECIDED in
+            app/(main)/layout.js and only displayed here, exactly as devAccess
+            above is -- this is a client component, and the answer is not the
+            authorisation: savePreferences checks the entitlement again per
+            changed setting, so flipping this boolean in devtools gets the
+            sheet and no saved settings.
+
+            Hiding it costs nothing free, which is why this can hide where
+            Settings cannot. The Appearance card there mixes nine paid
+            settings with the light/dark switch that every plan includes, so a
+            padlock over the card would lock a free feature -- it shows a
+            FeatureNotice instead. Here the free switch is its own control,
+            ThemeToggle, immediately above. Nothing a free account is entitled
+            to lives behind this button.
+
+            Default false: a call site that forgets the prop offers nothing
+            rather than offering a paid control, the same way a missing
+            devAccess shows no badge. */}
+        {canCustomize && <ThemeCustomizer />}
 
         <Separator orientation="vertical" className="mx-1 h-6" />
 
