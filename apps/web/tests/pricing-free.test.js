@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { FREE_FAQS, FEATURE_GROUPS, PLANS } from "@/data/pricing";
 import { ENTITLEMENT_KEYS } from "@/lib/billing/entitlements";
+import { landingActions, DEMO_HREF, SIGN_UP_HREF } from "@/lib/landing/cta";
 
 // The free pricing page, asserted at the source.
 //
@@ -36,7 +37,10 @@ describe("the page offers the sample-data route the user asked for", () => {
   });
 
   it("points it at guest mode and not at an account", () => {
-    expect(cta).toMatch(/<Link href="\/demo">Try it \(Sample Data!\)<\/Link>/);
+    expect(cta).toContain(
+      "<Link href={DEMO_HREF}>Try it (Sample Data!)</Link>"
+    );
+    expect(DEMO_HREF).toBe("/demo");
   });
 
   it("renders the buttons in both the hero and the closing section", () => {
@@ -72,16 +76,31 @@ describe("the buttons follow who is reading the page", () => {
 
   it("sends an account holder to their dashboard", () => {
     expect(cta).toContain("if (signedIn)");
-    expect(cta).toContain('<Link href="/dashboard">Go to dashboard</Link>');
+    expect(cta).toContain("landingActions(true,");
+    expect(cta).toContain("<Link href={primary.href}>{primary.label}</Link>");
+    expect(landingActions(true, { signUp: "unused" }).primary.href).toBe(
+      "/dashboard"
+    );
+  });
+
+  // Changed deliberately on 2026-11-13: it used to offer the sample data
+  // alongside the dashboard. /demo is still public and still reachable by
+  // URL -- it is the invitation that went, not the route.
+  it("offers an account holder nothing but their dashboard", () => {
+    expect(landingActions(true, { signUp: "x", demo: "y" }).secondary).toBeNull();
   });
 
   it("sends a guest part-way through the demo back to it, not through it again", () => {
     expect(cta).toContain("if (guest)");
-    expect(cta).toContain('<Link href="/demo">Back to your demo</Link>');
+    expect(cta).toContain("<Link href={DEMO_HREF}>Back to your demo</Link>");
+    expect(DEMO_HREF).toBe("/demo");
   });
 
   it("offers a first-time visitor the demo and an account", () => {
-    expect(cta).toContain('<Link href="/sign-up">Create a free account</Link>');
+    expect(cta).toContain(
+      "<Link href={SIGN_UP_HREF}>Create a free account</Link>"
+    );
+    expect(SIGN_UP_HREF).toBe("/sign-up");
   });
 
   it("detects a guest from the demo store's own key, not a copy of it", () => {

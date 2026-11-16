@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { landingActions } from "@/lib/landing/cta";
 import { Button } from "@/components/ui/button";
 import { publicAvailability } from "@/lib/billing/availability";
 import { enforcementEnabled } from "@/lib/billing/entitlements";
@@ -39,7 +40,15 @@ import PricingFaq from "./pricing-faq";
 // to anyone today, and tests/pricing-copy.test.js asserts that an answer says
 // so for as long as the quota stays off. That assertion reads PLAN_FAQS, not
 // this file, which is why removing the banner does not fail it.
-const PlanPricing = ({ signedIn, duration }) => (
+const PlanPricing = ({ signedIn, duration }) => {
+  // The session is resolved by the page and handed down; the rule itself is
+  // lib/landing/cta.js, shared with the landing page and /about.
+  const { primary, secondary } = landingActions(signedIn, {
+    signUp: "Get Started Free",
+    demo: "Explore WHealthOS",
+  });
+
+  return (
   <div className="container mx-auto px-4 pb-20">
     <div className="mx-auto max-w-2xl text-center">
       <span className="inline-block rounded-full border bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -93,22 +102,19 @@ const PlanPricing = ({ signedIn, duration }) => (
 
       <div className="flex shrink-0 flex-wrap gap-3">
         {/* Somebody signed in already has the free account this offers to
-            create. */}
-        {signedIn ? (
-          <Button asChild>
-            <Link href="/dashboard">Go to dashboard</Link>
-          </Button>
-        ) : (
-          <Button asChild>
-            <Link href="/sign-up">Get Started Free</Link>
+            create, and does not need the sample data either. */}
+        <Button asChild>
+          <Link href={primary.href}>{primary.label}</Link>
+        </Button>
+        {secondary && (
+          <Button variant="outline" asChild>
+            <Link href={secondary.href}>{secondary.label}</Link>
           </Button>
         )}
-        <Button variant="outline" asChild>
-          <Link href="/demo">Explore WHealthOS</Link>
-        </Button>
       </div>
     </section>
   </div>
-);
+  );
+};
 
 export default PlanPricing;

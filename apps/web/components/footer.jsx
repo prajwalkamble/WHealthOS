@@ -1,8 +1,10 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
 import BackToTop from "@/components/back-to-top";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { landingActions } from "@/lib/landing/cta";
 import { FOOTER_TOOL_SLUGS, toolBySlug, toolPath } from "@/lib/tools/registry";
 import { COMPANY_CONTENT_LINKS, COMPANY_NAV } from "@/lib/company/links";
 import { CONTACT_EMAIL } from "@/lib/company/contact";
@@ -124,7 +126,20 @@ const LinkColumn = ({ title, links }) => (
   </nav>
 );
 
-const Footer = () => {
+const Footer = async () => {
+  // The footer's standing offer, which appears on every marketing page --
+  // so it is the one most likely to be read by somebody already signed in,
+  // and was the last place still inviting them to create an account.
+  //
+  // One action only: there is no demo button here and never was, so `demo`
+  // is omitted and landingActions returns no secondary for a visitor
+  // either. Read on the server like header.jsx, which sits in the same
+  // layout and already calls auth() on this request.
+  const { userId } = await auth();
+  const { primary } = landingActions(Boolean(userId), {
+    signUp: "Get Started",
+  });
+
   const year = new Date().getFullYear();
 
   return (
@@ -147,8 +162,8 @@ const Footer = () => {
             size="lg"
             className="h-12 shrink-0 self-start rounded-md px-8 text-sm tracking-wide sm:self-auto lg:h-14 lg:px-9"
           >
-            <Link href="/sign-up">
-              Get Started
+            <Link href={primary.href}>
+              {primary.label}
               <ArrowRight aria-hidden className="ml-1" />
             </Link>
           </Button>

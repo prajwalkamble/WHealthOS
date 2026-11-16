@@ -1,6 +1,8 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { SHELL } from "./section";
+import { landingActions } from "@/lib/landing/cta";
 import { cn } from "@/lib/utils";
 
 // The page's closing action.
@@ -20,44 +22,61 @@ import { cn } from "@/lib/utils";
 // and no promise about what the product will do for someone's money. The two
 // destinations are the two real ones: the Clerk sign-up flow, and the demo.
 //
+// Who is reading decides which of them appear, and the hero at the top of the
+// page asks the same function -- lib/landing/cta.js -- so the page cannot
+// offer a dashboard at the top and an account signup at the bottom. Reading
+// the session here rather than taking it as a prop keeps the section usable
+// on any page that mounts it, the way the header already works; the marketing
+// layout calls auth() on this request too, so it costs no second round trip.
+//
 // It sits above the footer's own call to action, which says much the same
 // thing on every page of the site. That overlap is deliberate and was asked
 // for: this one closes the argument the page has been making, and the
 // footer's is a standing offer that belongs to every other page too.
-const FinalCta = () => (
-  <section aria-labelledby="get-started" className="reveal mt-20 md:mt-28">
-    <div className={cn(SHELL, "text-center")}>
-      <h2
-        id="get-started"
-        className="mx-auto max-w-3xl scroll-mt-28 text-balance text-3xl font-semibold leading-[1.15] tracking-tight md:text-[2.5rem]"
-      >
-        Bring your finances into focus.
-      </h2>
+const FinalCta = async () => {
+  const { userId } = await auth();
+  const { primary, secondary } = landingActions(Boolean(userId), {
+    signUp: "Create your account",
+    demo: "Try it without signing up",
+  });
 
-      <p className="mx-auto mt-5 max-w-xl text-lg leading-[1.8] text-muted-foreground">
-        Start with one account and a week of transactions. That is enough for
-        the dashboard to tell you something you did not already know.
-      </p>
+  return (
+    <section aria-labelledby="get-started" className="reveal mt-20 md:mt-28">
+      <div className={cn(SHELL, "text-center")}>
+        <h2
+          id="get-started"
+          className="mx-auto max-w-3xl scroll-mt-28 text-balance text-3xl font-semibold leading-[1.15] tracking-tight md:text-[2.5rem]"
+        >
+          Bring your finances into focus.
+        </h2>
 
-      <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <Button
-          asChild
-          size="lg"
-          className="h-[50px] w-full rounded-full px-8 text-base font-medium sm:w-auto"
-        >
-          <Link href="/sign-up">Create your account</Link>
-        </Button>
-        <Button
-          asChild
-          size="lg"
-          variant="outline"
-          className="h-[50px] w-full rounded-full bg-transparent px-8 text-base font-medium sm:w-auto"
-        >
-          <Link href="/demo">Try it without signing up</Link>
-        </Button>
+        <p className="mx-auto mt-5 max-w-xl text-lg leading-[1.8] text-muted-foreground">
+          Start with one account and a week of transactions. That is enough for
+          the dashboard to tell you something you did not already know.
+        </p>
+
+        <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Button
+            asChild
+            size="lg"
+            className="h-[50px] w-full rounded-full px-8 text-base font-medium sm:w-auto"
+          >
+            <Link href={primary.href}>{primary.label}</Link>
+          </Button>
+          {secondary && (
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="h-[50px] w-full rounded-full bg-transparent px-8 text-base font-medium sm:w-auto"
+            >
+              <Link href={secondary.href}>{secondary.label}</Link>
+            </Button>
+          )}
+        </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 export default FinalCta;

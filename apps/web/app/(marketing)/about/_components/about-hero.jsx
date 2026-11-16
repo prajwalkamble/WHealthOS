@@ -1,6 +1,8 @@
+import { auth } from "@clerk/nextjs/server";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { landingActions } from "@/lib/landing/cta";
 
 // Asymmetric rather than a centred SaaS hero: copy on the left, the real
 // product on the right.
@@ -9,7 +11,17 @@ import { Button } from "@/components/ui/button";
 // show the application's own navigation and figures. They do have to be
 // recaptured when a section ships -- these two spent a while showing Cards,
 // Budgets, Goals and Analytics greyed out after all four were built.
-const AboutHero = () => (
+const AboutHero = async () => {
+  const { userId } = await auth();
+  // Same rule as the landing page -- lib/landing/cta.js. Somebody signed in
+  // is offered their dashboard and nothing else; /demo stays public and
+  // reachable, it is just not pitched to them here.
+  const { primary, secondary } = landingActions(Boolean(userId), {
+    signUp: "Get Started",
+    demo: "Explore WHealthOS",
+  });
+
+  return (
   <header className="grid items-center gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-14">
     <div>
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -33,11 +45,13 @@ const AboutHero = () => (
 
       <div className="mt-8 flex flex-wrap gap-3">
         <Button size="lg" asChild>
-          <Link href="/sign-up">Get Started</Link>
+          <Link href={primary.href}>{primary.label}</Link>
         </Button>
-        <Button size="lg" variant="outline" asChild>
-          <Link href="/demo">Explore WHealthOS</Link>
-        </Button>
+        {secondary && (
+          <Button size="lg" variant="outline" asChild>
+            <Link href={secondary.href}>{secondary.label}</Link>
+          </Button>
+        )}
       </div>
     </div>
 
@@ -63,6 +77,7 @@ const AboutHero = () => (
       </div>
     </figure>
   </header>
-);
+  );
+};
 
 export default AboutHero;

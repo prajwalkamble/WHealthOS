@@ -176,7 +176,11 @@ describe("The Company routes", () => {
   it("carries the call to action, and the landing page no longer repeats it", () => {
     const footer = read(FOOTER);
     expect(footer).toContain("Take control of your finances");
-    expect(footer).toContain('href="/sign-up"');
+    // The destination stopped being a literal on 2026-11-13: it follows who
+    // is reading, via lib/landing/cta.js, which sends a visitor to /sign-up
+    // and somebody signed in to their dashboard.
+    expect(footer).toContain("landingActions");
+    expect(footer).toContain("{primary.label}");
     expect(renderedText(read("app/(marketing)/page.jsx"))).not.toContain(
       "Ready to take control"
     );

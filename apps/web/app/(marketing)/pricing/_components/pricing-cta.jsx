@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 // From storage-key rather than from store: store pulls in the sample dataset
 // and the dashboard computation, and this page only needs the key.
 import { DEMO_STORAGE_KEY } from "@/lib/demo/storage-key";
+import { landingActions, DEMO_HREF, SIGN_UP_HREF } from "@/lib/landing/cta";
 
 // The buttons, which depend on who is reading the page.
 //
@@ -40,19 +41,18 @@ const PricingCta = ({ signedIn, size }) => {
     }
   }, [signedIn]);
 
-  // The account holder. The sample-data route stays on offer -- the page is
-  // public and the button is what it says it is -- but it is no longer the
-  // thing being pointed at.
+  // The account holder. One action, and not the sample data: /demo is still
+  // public and still reachable by URL, but an invitation to sample figures is
+  // not worth a button on a page being read by somebody who has the real
+  // thing. This branch used to keep it; the rule changed on 2026-11-13 and
+  // now comes from lib/landing/cta.js, shared with the landing page, /about
+  // and the footer so the site cannot say two different things.
   if (signedIn) {
+    const { primary } = landingActions(true, { signUp: "Get Started Free" });
     return (
-      <>
-        <Button size={size} asChild>
-          <Link href="/dashboard">Go to dashboard</Link>
-        </Button>
-        <Button size={size} variant="outline" asChild>
-          <Link href="/demo">Try it (Sample Data!)</Link>
-        </Button>
-      </>
+      <Button size={size} asChild>
+        <Link href={primary.href}>{primary.label}</Link>
+      </Button>
     );
   }
 
@@ -63,10 +63,10 @@ const PricingCta = ({ signedIn, size }) => {
     return (
       <>
         <Button size={size} asChild>
-          <Link href="/demo">Back to your demo</Link>
+          <Link href={DEMO_HREF}>Back to your demo</Link>
         </Button>
         <Button size={size} variant="outline" asChild>
-          <Link href="/sign-up">Create a free account</Link>
+          <Link href={SIGN_UP_HREF}>Create a free account</Link>
         </Button>
       </>
     );
@@ -75,10 +75,10 @@ const PricingCta = ({ signedIn, size }) => {
   return (
     <>
       <Button size={size} asChild>
-        <Link href="/demo">Try it (Sample Data!)</Link>
+        <Link href={DEMO_HREF}>Try it (Sample Data!)</Link>
       </Button>
       <Button size={size} variant="outline" asChild>
-        <Link href="/sign-up">Create a free account</Link>
+        <Link href={SIGN_UP_HREF}>Create a free account</Link>
       </Button>
     </>
   );

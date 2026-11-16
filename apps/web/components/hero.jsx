@@ -1,9 +1,11 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Button } from "./ui/button";
 import DashboardProductDemo from "./landing/dashboard-product-demo";
 import HeroChartBackdrop from "./landing/hero-chart-backdrop";
 import { SHELL } from "./landing/section";
 import { cn } from "@/lib/utils";
+import { landingActions } from "@/lib/landing/cta";
 
 // A server component. It used to be a client component purely to drive a 3D
 // tilt on the hero image from a window scroll listener. That cost a client
@@ -29,7 +31,25 @@ import { cn } from "@/lib/utils";
 // CurrencyProvider that does it is mounted by app/(marketing)/page.jsx, around
 // the whole page rather than around this component, so the hero's demo and the
 // Solutions panels further down agree with each other.
-const HeroSection = () => {
+const HeroSection = async () => {
+  // Read on the server, off the verified cookie, exactly as header.jsx does --
+  // so the primary action is correct in the first HTML rather than changing
+  // under the reader a moment after hydration, and so a logged-out visitor
+  // still loads no Clerk JavaScript for it. The marketing layout already calls
+  // auth() on this request, and this page is server-rendered on demand
+  // regardless (it reads a currency cookie), so this costs nothing new.
+  const { userId } = await auth();
+  const signedIn = Boolean(userId);
+
+  // Decided in one place, shared with the page's closing section. There is no
+  // third state to render: auth() has resolved by the time this returns, so
+  // the first HTML already carries the right button and there is nothing to
+  // swap afterwards -- no skeleton, no flash of the wrong action.
+  const { primary, secondary } = landingActions(signedIn, {
+    signUp: "Get Started",
+    demo: "Explore the live demo",
+  });
+
   return (
     // The positioned, full-width wrapper the backdrop hangs off. It is here
     // rather than on SHELL because the chart runs the width of the page while
@@ -75,7 +95,10 @@ const HeroSection = () => {
             connection.
           </p>
 
-          {/* Two actions, in order: create an account, or look first.
+          {/* Two actions for a visitor, in order: create an account, or
+              look first. One for somebody signed in, straight to their own
+              dashboard -- see lib/landing/cta.js, which decides this for the
+              closing section too so the page cannot say both things.
 
               The secondary one is here as well as in the header on purpose.
               The header's "Explore WHealthOS" button is hidden below md, so on
@@ -83,27 +106,42 @@ const HeroSection = () => {
               the collapsed menu -- and looking before signing up is the thing
               most visitors to a pre-launch finance product want to do. Both
               destinations exist: /sign-up is the real Clerk flow and /demo is
-              the application on sample data. */}
+              the application on sample data.
+
+              The demo invitation goes away once there is an account to use:
+              sample data is not an upgrade on the real thing. /demo itself is
+              untouched and still public -- it is this invitation that is
+              conditional, not the route. */}
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             {/* asChild: the button renders as the link itself. A <button>
-                nested inside an <a> is invalid HTML. */}
+                nested inside an <a> is invalid HTML.
+
+                Both buttons keep the size, radius and weight they had. Only
+                which of them exists, where they point and what the first one
+                is called depend on the reader. */}
             <Button
               size="lg"
               asChild
               className="h-[50px] w-full rounded-full px-8 text-base font-medium sm:w-auto"
             >
-              <Link href="/sign-up">Get Started</Link>
+              <Link href={primary.href}>{primary.label}</Link>
             </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              asChild
-              className={cn(
-                "h-[50px] w-full rounded-full bg-transparent px-8 text-base font-medium sm:w-auto"
-              )}
-            >
-              <Link href="/demo">Explore the live demo</Link>
-            </Button>
+            {/* Rendered or not at all. An outline button with nothing behind
+                it, or a hidden one still holding its width, would leave the
+                single action sitting off-centre -- the row centres what it
+                actually contains. */}
+            {secondary && (
+              <Button
+                size="lg"
+                variant="outline"
+                asChild
+                className={cn(
+                  "h-[50px] w-full rounded-full bg-transparent px-8 text-base font-medium sm:w-auto"
+                )}
+              >
+                <Link href={secondary.href}>{secondary.label}</Link>
+              </Button>
+            )}
           </div>
         </div>
 
