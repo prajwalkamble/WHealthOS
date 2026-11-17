@@ -14,6 +14,18 @@ generator client {
   // "could not locate the Query Engine". A stable directory the app can
   // resolve normally avoids the whole problem.
   output   = "../generated/client"
+
+  // The query engine is a native binary compiled per platform, and `native`
+  // alone means "whatever machine ran generate". A Debian laptop produces
+  // libquery_engine-debian-openssl-3.0.x.so.node; Vercel's runtime is Amazon
+  // Linux and loads rhel-openssl-3.0.x. Naming rhel explicitly means the
+  // engine the deployment needs exists even when the client was generated
+  // somewhere that is not the deployment image -- a cached install, CI, or a
+  // developer running generate before a build.
+  //
+  // This is half the fix. The other half is next.config.mjs: generating the
+  // right binary does nothing if Next does not copy it into the function.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

@@ -1,4 +1,13 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { buildContentSecurityPolicy, HEADER_NAME } from "./lib/security/csp.mjs";
+
+// This file's own directory, and the workspace root two levels above it.
+// Computed from import.meta.url rather than import.meta.dirname so the config
+// does not depend on the build image's Node being 20.11 or newer.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.join(here, "..", "..");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -7,6 +16,25 @@ const nextConfig = {
   // Setting NEXT_DIST_DIR lets a verification build run beside a dev server
   // someone is using: `NEXT_DIST_DIR=.next-build pnpm build`.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+
+  // The Prisma query engine has to travel with the deployed function.
+  //
+  // It is a native .so.node loaded by path at runtime, and it lives in the
+  // `database` workspace package, outside this app. Next's file tracer
+  // follows imports; it cannot see a binary that is opened dynamically from
+  // another package, so it shipped a function with the client and without the
+  // engine. Every server-side query then failed at startup with
+  // "could not locate the Query Engine for runtime rhel-openssl-3.0.x" --
+  // which reads like a missing binary target, but the binary was built
+  // correctly on Vercel and simply never copied into /var/task.
+  //
+  // outputFileTracingRoot has to name the workspace root, or a path outside
+  // apps/web cannot be included at all. The include glob is relative to this
+  // directory. See database/prisma/schema.prisma for the other half.
+  outputFileTracingRoot: workspaceRoot,
+  outputFileTracingIncludes: {
+    "/**/*": ["../../database/generated/client/**/*"],
+  },
 
   images: {
     remotePatterns: [
