@@ -48,6 +48,9 @@ package-lock.json
 
 # Prisma client, generated on install (see database/prisma/schema.prisma)
 database/generated/
+# The query engine, staged into the app so a deployed function can find
+# it (see apps/web/scripts/stage-prisma-engine.mjs). Build output.
+apps/web/generated/
 # Playwright CLI output (may contain credentials)
 .playwright-cli/
 .next-build

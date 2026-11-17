@@ -28,12 +28,27 @@ const nextConfig = {
   // which reads like a missing binary target, but the binary was built
   // correctly on Vercel and simply never copied into /var/task.
   //
-  // outputFileTracingRoot has to name the workspace root, or a path outside
-  // apps/web cannot be included at all. The include glob is relative to this
-  // directory. See database/prisma/schema.prisma for the other half.
+  // Prisma looks for it in a fixed list of places, all of them relative to
+  // the function's cwd (/var/task/apps/web) except one absolute path baked in
+  // at generate time, which does not survive the build machine:
+  //
+  //   <cwd>/generated/client   <cwd>/.next/server   <cwd>/.prisma/client
+  //   /vercel/path0/database/generated/client   /tmp/prisma-engines
+  //
+  // Tracing it out of the database package was tried first and deployed
+  // without helping: the engine arrived at /var/task/database/generated/
+  // client, which is not on that list, so Prisma never saw it. Carrying the
+  // file is not enough -- it has to land somewhere Prisma looks.
+  //
+  // scripts/stage-prisma-engine.mjs copies it to apps/web/generated/client
+  // before the build, which is the first candidate above; this include then
+  // carries that staged copy into the function. The glob is relative to this
+  // directory. outputFileTracingRoot names the workspace root so the function
+  // keeps its apps/web prefix, which is what makes cwd /var/task/apps/web.
+  // See database/prisma/schema.prisma for the binary-target half.
   outputFileTracingRoot: workspaceRoot,
   outputFileTracingIncludes: {
-    "/**/*": ["../../database/generated/client/**/*"],
+    "/**/*": ["generated/client/**/*"],
   },
 
   images: {
