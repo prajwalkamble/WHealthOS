@@ -21,7 +21,24 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 // actually needed. Doing it here instead of in the shared Header keeps the
 // public landing page off the database entirely.
 const MainLayout = async ({ children }) => {
-  const user = await checkUser();
+  // Three independent reads, started together rather than one after another.
+  //
+  // checkUser() resolves the account, currentCurrency() reads a cookie, the
+  // country header and the account's saved preference, and cookies() is
+  // already in memory. None of them needs an answer from any other, and
+  // awaited in sequence they cost three serial round trips to Mumbai before
+  // this layout renders a single element -- on every full load of every page
+  // under (main). presentationData() stays behind them because it is scoped
+  // to the account and cannot start until there is one.
+  //
+  // The cost of starting currentCurrency() before the redirect below is one
+  // query for somebody who turns out to have no account yet. That is the
+  // one-time consent step, not a path anybody repeats.
+  const [user, cookieStore, currency] = await Promise.all([
+    checkUser(),
+    cookies(),
+    currentCurrency(),
+  ]);
 
   // Signed in (the middleware saw to that) but no WHealthOS account yet, which
   // means the consent step has not been completed. The account is created
@@ -44,19 +61,17 @@ const MainLayout = async ({ children }) => {
 
   // The sidebar writes its open state to a cookie; reading it here renders it
   // in the right state instead of flicking open on the first paint.
-  const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
-  // Resolved here, on the server, so the first paint is already in the right
-  // currency. Doing it in the browser would render every figure in the
-  // default and then swap it a frame later -- a hydration mismatch, and an
-  // unpleasant one to watch on a page of balances.
+  // `currency` above is resolved on the server, so the first paint is already
+  // in the right currency. Doing it in the browser would render every figure
+  // in the default and then swap it a frame later -- a hydration mismatch,
+  // and an unpleasant one to watch on a page of balances.
   //
   // This layout is already dynamic (it reads cookies and the account), so
   // this costs nothing. The root layout is deliberately left alone: a
   // cookies() call there would opt the marketing pages out of static
   // generation for a currency none of them displays.
-  const currency = await currentCurrency();
 
   // The INPUTS to the presentation decision, not the decision itself.
   //

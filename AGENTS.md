@@ -66,6 +66,15 @@ NEXT_DIST_DIR=.next-build pnpm build
   first.
 - **An animation on `transform` replaces a `rotate-*` class.** Put both in the
   keyframes.
+- **`vercel.json` pins the functions to `bom1`, and it has to stay pinned.**
+  Supabase is in `ap-south-1` (Mumbai) and Vercel's default region is `iad1`
+  (Washington). Deployed on the default, every page under `(main)` ran its
+  database round trips across the planet at roughly 200ms each -- and the
+  dashboard makes about twenty-five of them in sequence, because the queries
+  inside one Prisma interactive transaction share a single connection and run
+  one after another however they are awaited. That is a five-second dashboard
+  with no slow query in it anywhere. Co-located it is about 2ms per round
+  trip. If the region is ever unset, nothing breaks and everything crawls.
 - **The Resend webhook must stay out of the Arcjet middleware.** `detectBot`
   runs LIVE in production on every API route and does not allow Resend, so a
   matched webhook path has its deliveries blocked. `middleware.js` excludes

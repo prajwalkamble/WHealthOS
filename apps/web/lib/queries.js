@@ -231,37 +231,36 @@ async function breakdownFor(tx, userId) {
   return { expenses: of("EXPENSE"), income: of("INCOME") };
 }
 
-// The dashboard overview needs exactly two things: the handful of most recent
-// transactions per account, and this month's expenses for the category
-// breakdown. It used to load every transaction the user had ever made and ship
-// all of them to the browser to be filtered there.
-const RECENT_TRANSACTION_LIMIT = 100;
-const MONTHLY_TRANSACTION_LIMIT = 2000;
+// The most recent transactions, for the dashboard's Recent Transactions card.
+//
+// Exactly as many as are displayed. Everything else the dashboard knows about
+// transactions it gets from an aggregate -- the stat cards from summaryFor,
+// the charts from cashFlowFor and breakdownFor, all computed by the database
+// -- so the only consumers of this list are that card, which slices it to
+// `limit`, and the `hasTransactions` flag, which asks whether it is empty.
+//
+// It used to be two queries for as many as 2,100 rows: the hundred most
+// recent, plus every transaction this month, de-duplicated in JavaScript. That
+// was left from when the browser did the filtering, and the comment describing
+// the fix outlived the second half of it -- the category breakdown became a
+// groupBy on the database and nothing has needed the monthly set since. All
+// 2,100 rows were still being read, serialised and shipped in the RSC payload
+// on every dashboard load so that eight of them could be drawn, and the bill
+// for it grew with the account.
+export const RECENT_TRANSACTION_LIMIT = 8;
 
-async function recentTransactionsFor(tx, userId) {
-  // This month on the app's calendar, matching the budget and the reports.
-  const { startOfMonth } = monthBounds();
+async function recentTransactionsFor(tx, userId, limit = RECENT_TRANSACTION_LIMIT) {
+  const rows = await tx.transaction.findMany({
+    where: { userId },
+    // createdAt breaks ties on date. `date` is the day the person chose, so
+    // several rows routinely share one; ordering by it alone leaves which
+    // eight of that day's transactions appear, and in what order, up to the
+    // database, and it can answer differently on the next load.
+    orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+    take: limit,
+  });
 
-  const [recent, thisMonth] = await Promise.all([
-    tx.transaction.findMany({
-      where: { userId },
-      orderBy: { date: "desc" },
-      take: RECENT_TRANSACTION_LIMIT,
-    }),
-    tx.transaction.findMany({
-      where: { userId, date: { gte: startOfMonth } },
-      orderBy: { date: "desc" },
-      take: MONTHLY_TRANSACTION_LIMIT,
-    }),
-  ]);
-
-  // The two windows overlap, so de-duplicate before handing them over.
-  const byId = new Map();
-  for (const row of [...recent, ...thisMonth]) byId.set(row.id, row);
-
-  return [...byId.values()]
-    .sort((a, b) => b.date - a.date)
-    .map(serializeDecimals);
+  return rows.map(serializeDecimals);
 }
 
 // This month's spending on one account, against the budget. accountId is

@@ -31,16 +31,22 @@ const mayScan = async () => {
 };
 
 export default async function AddTransactionPage({ searchParams }) {
-  const accounts = await getUserAccounts();
   const { edit: editId } = (await searchParams) ?? {};
-  const canScan = await mayScan();
 
-  let initialData = null;
-  if (editId) {
-    initialData = await getTransaction(editId);
-    // A stale or foreign id used to crash the page; it is simply not found.
-    if (!initialData) notFound();
-  }
+  // Three independent reads, started together rather than one after another.
+  // getUserAccounts() opens a tenant transaction, mayScan() resolves the
+  // account's plan, and the edit case fetches the transaction being edited.
+  // None of them needs an answer from any other, and awaited in turn they
+  // were three serial round trips to the database before this form could
+  // render -- on the page the dashboard's own Add Transaction button opens.
+  const [accounts, canScan, initialData] = await Promise.all([
+    getUserAccounts(),
+    mayScan(),
+    editId ? getTransaction(editId) : null,
+  ]);
+
+  // A stale or foreign id used to crash the page; it is simply not found.
+  if (editId && !initialData) notFound();
 
   return (
     <div className="max-w-3xl mx-auto px-5">

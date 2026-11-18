@@ -1,4 +1,4 @@
-import { getDashboardPageData } from '@/lib/queries';
+import { getDashboardPageData, RECENT_TRANSACTION_LIMIT } from '@/lib/queries';
 import BudgetProgress from './_components/budget-progress';
 import StatCards from './_components/stat-cards';
 import CashFlowChart from './_components/cash-flow-chart';
@@ -41,10 +41,12 @@ async function DashboardPage() {
           them fill the same height, Accounts taking whatever Budget leaves. */}
       <div className="grid gap-6 xl:grid-cols-2">
         <div className="flex">
+          {/* The same constant the query uses, so the card cannot ask for
+              more rows than were fetched. */}
           <RecentTransactions
             transactions={transactions}
             accounts={accounts}
-            limit={8}
+            limit={RECENT_TRANSACTION_LIMIT}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-6">
